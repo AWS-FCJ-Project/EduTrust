@@ -216,6 +216,42 @@ async def submit_exam(
     new_submission["student_id"] = str(current_user["_id"])
     new_submission["submitted_at"] = datetime.now(timezone.utc)
 
+    # Calculate Score
+    try:
+        exam = await exams_collection.find_one({"_id": ObjectId(exam_id)})
+        if not exam:
+            raise HTTPException(status_code=404, detail="Exam not found")
+        
+        questions = exam.get("questions", [])
+        total_questions = len(questions)
+        correct_count = 0
+        
+        if total_questions > 0:
+            student_answers = submission_data.answers
+            for i, q in enumerate(questions):
+                # Using string key because Pydantic dict handles keys as strings or as provided
+                # In frontend it's common to send index as string or number
+                selected = student_answers.get(str(i))
+                if selected is None:
+                    selected = student_answers.get(i)
+                
+                if selected is not None and selected == q.get("correct"):
+                    correct_count += 1
+            
+            score = (correct_count / total_questions) * 10
+        else:
+            score = 0
+            
+        new_submission["score"] = score
+        new_submission["correct_count"] = correct_count
+        new_submission["total_questions"] = total_questions
+        
+    except Exception as e:
+        print(f"[ERROR] Score calculation failed: {str(e)}")
+        new_submission["score"] = 0
+        new_submission["correct_count"] = 0
+        new_submission["total_questions"] = 0
+
     await submissions_collection.insert_one(new_submission)
 
     # --- Violation Logic ---
@@ -256,6 +292,80 @@ async def submit_exam(
         print(f"[ERROR] Violation cleanup/record failed: {str(e)}")
 
     return {"message": "Exam submitted successfully"}
+
+
+@router.get("/results/my", response_model=List[dict])
+async def get_my_results(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Only students can view their results")
+    
+    student_id = str(current_user["_id"])
+    submissions = await submissions_collection.find({"student_id": student_id}).to_list(None)
+    
+    results = []
+    for sub in submissions:
+        exam = await exams_collection.find_one({"_id": ObjectId(sub["exam_id"])})
+        if exam:
+            results.append({
+                "exam_id": sub["exam_id"],
+                "exam_title": exam["title"],
+                "subject": exam["subject"],
+                "score": sub.get("score", 0),
+                "correct_count": sub.get("correct_count", 0),
+                "total_questions": sub.get("total_questions", 0),
+                "status": sub.get("status"),
+                "submitted_at": sub.get("submitted_at")
+            })
+    
+    # Sort by submitted_at desc
+    results.sort(key=lambda x: x["submitted_at"] if x["submitted_at"] else datetime.min, reverse=True)
+    return results
+
+
+@router.get("/all-results/summary", response_model=List[dict])
+async def get_all_results_summary(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ["admin", "teacher"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    exams = await exams_collection.find().to_list(None)
+    summary = []
+    
+    for exam in exams:
+        exam_id = str(exam["_id"])
+        
+        # Aggregate statistics from submissions
+        # We could use MongoDB aggregation, but for simplicity with motor:
+        pipeline = [
+            {"$match": {"exam_id": exam_id}},
+            {"$group": {
+                "_id": "$exam_id",
+                "total_submissions": {"$sum": 1},
+                "average_score": {"$avg": "$score"},
+                "highest_score": {"$max": "$score"},
+                "violations_sum": {"$sum": "$violation_count"}
+            }}
+        ]
+        
+        cursor = submissions_collection.aggregate(pipeline)
+        stats_list = await cursor.to_list(length=1)
+        stats = stats_list[0] if stats_list else {
+            "total_submissions": 0,
+            "average_score": 0,
+            "highest_score": 0,
+            "violations_sum": 0
+        }
+        
+        summary.append({
+            "id": exam_id,
+            "title": exam["title"],
+            "subject": exam["subject"],
+            "total_submissions": stats["total_submissions"],
+            "average_score": stats["average_score"] or 0,
+            "highest_score": stats["highest_score"] or 0,
+            "violations_count": stats["violations_sum"] or 0
+        })
+        
+    return summary
 
 
 @router.get("/{exam_id}", response_model=dict)

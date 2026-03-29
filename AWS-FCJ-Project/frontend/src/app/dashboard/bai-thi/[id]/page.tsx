@@ -10,6 +10,7 @@ import CameraMonitor from '@/components/camera/CameraMonitor';
 import Cookies from 'js-cookie';
 
 type SelectedAnswers = { [key: number]: number };
+type ExamStep = 'camera' | 'key' | 'exam';
 
 const QUESTIONS_PER_PAGE = 10;
 
@@ -25,7 +26,6 @@ const ExamPage = () => {
     const [timeLeft, setTimeLeft] = useState<number>(0);
     const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
     // 3-step flow: 'camera' → 'key' → 'exam'
-    type ExamStep = 'camera' | 'key' | 'exam';
     const [examStep, setExamStep] = useState<ExamStep>('camera');
     const [cameraStatus, setCameraStatus] = useState("Initializing...");
     const [violationCount, setViolationCount] = useState(0);
@@ -183,7 +183,7 @@ const ExamPage = () => {
         }
     }, [showCheatModal, isSubmitted, exitCountdown, router]);
 
-    const submitExam = async (finalStatus: string = "completed") => {
+    const submitExam = useCallback(async (finalStatus: string = "completed") => {
         if (isSubmitted) return;
         setIsSubmitted(true);
         try {
@@ -201,7 +201,7 @@ const ExamPage = () => {
                 })
             });
         } catch (e) { console.error("Submit Error:", e); }
-    };
+    }, [isSubmitted, examId, selectedAnswers, violationCount]);
 
     const handleCameraReady = useCallback(() => {
         setExamStep('key');
@@ -242,7 +242,7 @@ const ExamPage = () => {
             }
             return n;
         });
-    }, [examStep, isGracePeriod, isSubmitted]);
+    }, [examStep, isGracePeriod, isSubmitted, submitExam]);
 
     const formatTime = (seconds: number): string => {
         const h = Math.floor(seconds / 3600);
@@ -360,17 +360,6 @@ const ExamPage = () => {
     const currentQuestionIndexes = Array.from({ length: QUESTIONS_PER_PAGE }, (_, i) => startIndex + i)
         .filter(idx => idx < totalQuestions);
     const totalPages = Math.ceil(totalQuestions / QUESTIONS_PER_PAGE);
-
-            <div className="fixed inset-0 z-[11000] bg-white flex flex-col items-center justify-center p-6 text-center animate-in zoom-in duration-500">
-                <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 shadow-xl animate-bounce">
-                    <Trophy size={48} />
-                </div>
-                <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">Bài thi đã hoàn thành!</h1>
-                <p className="text-gray-500 font-medium mb-12 italic">Hệ thống đang xử lý kết quả của bạn.</p>
-                <div className="bg-[#5B0019] text-white py-4 px-16 rounded-2xl font-black text-lg shadow-2xl">
-                    THOÁT SAU {exitCountdown}S
-                </div>
-            </div>
 
     return (
         <div className="fixed inset-0 z-[10000] flex flex-col w-full h-screen bg-gray-50 font-sans overflow-hidden text-sm">
@@ -718,6 +707,20 @@ const ExamPage = () => {
                                 EduTrust AI Proctoring Security
                             </p>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Submission Success Screen */}
+            {isSubmitted && !showCheatModal && (
+                <div className="fixed inset-0 z-[11000] bg-white flex flex-col items-center justify-center p-6 text-center animate-in zoom-in duration-500">
+                    <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 shadow-xl animate-bounce">
+                        <Trophy size={48} />
+                    </div>
+                    <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">Bài thi đã hoàn thành!</h1>
+                    <p className="text-gray-500 font-medium mb-12 italic">Hệ thống đang xử lý kết quả của bạn.</p>
+                    <div className="bg-[#5B0019] text-white py-4 px-16 rounded-2xl font-black text-lg shadow-2xl">
+                        THOÁT SAU {exitCountdown}S
                     </div>
                 </div>
             )}
