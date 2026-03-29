@@ -1,0 +1,52 @@
+# --- terraform.tfvars.example ---
+
+# AWS & Region
+aws_region = ""
+
+# EC2 & Key Pair
+ec2_instance_type = ""
+ec2_instance_name = ""
+ec2_key_name      = ""
+
+# ECR Configuration
+ecr_repository_name = ""
+ecr_tag_immutable   = false
+
+# Auto Scaling Group (ASG)
+asg_min_size         = 0
+asg_max_size         = 0
+asg_desired_capacity = 0
+backend_image_tag    = ""
+
+
+
+# Security Group Egress (Outbound)
+docdb_egress_cidr_blocks = []
+redis_egress_cidr_blocks = []
+dns_egress_cidr_blocks   = []
+
+# Network (VPC & Subnets)
+vpc_cidr_block         = ""
+private_subnet_1a_cidr = ""
+private_subnet_1c_cidr = ""
+public_subnet_1a_cidr  = ""
+public_subnet_1c_cidr  = ""
+
+# Project Params (VPC & IGW)
+vpc_name     = ""
+igw_name     = ""
+backend_port = 0
+
+# SSL, Domain & Auth Configuration
+
+domain_name           = ""
+cognito_domain_prefix = ""
+frontend_bucket_name  = ""
+
+# VPC Endpoint Service Names
+s3_endpoint_service_name      = ""
+ecr_dkr_endpoint_service_name = ""
+ecr_api_endpoint_service_name = ""
+ssm_endpoint_service_name     = ""
+sts_endpoint_service_name     = ""
+logs_endpoint_service_name    = ""
