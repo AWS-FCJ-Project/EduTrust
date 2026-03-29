@@ -9,21 +9,18 @@ import {
     Mail,
     ArrowRight
 } from "lucide-react";
+import Image from "next/image";
 
 export default function Footer() {
     return (
         <footer className="w-full bg-[#111827] text-gray-400 font-sans">
 
             <div className="max-w-7xl mx-auto px-6 py-16">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-12">
-
-                    <div className="lg:col-span-1">
-                        <div className="flex items-center gap-2 mb-6">
-                            <div className="bg-[#0D9488] p-1.5 rounded-lg">
-                                <span className="text-white font-bold text-xl leading-none">ET</span>
-                            </div>
-                            <span className="text-white font-bold text-2xl tracking-tight">EDUTRUST</span>
-                        </div>
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-12 mb-6">
+                    {/* Brand Description Column */}
+                    <div>
+                        <h3 className="text-white font-black text-xl tracking-[0.1em] mb-6 uppercase">EduTrust</h3>
                         <p className="text-sm leading-relaxed mb-6">
                             Nền tảng xây dựng niềm tin và chuẩn mực cho giáo dục hiện đại. Giải pháp kiểm định toàn diện.
                         </p>
@@ -35,6 +32,7 @@ export default function Footer() {
                         </div>
                     </div>
 
+                    {/* Về EduTrust */}
                     <div>
                         <h3 className="text-white font-bold text-sm mb-6 uppercase tracking-[0.1em]">Về EduTrust</h3>
                         <ul className="space-y-4 text-sm">
@@ -44,6 +42,8 @@ export default function Footer() {
                             <li><a href="#" className="hover:text-white transition-colors">Tuyển dụng</a></li>
                         </ul>
                     </div>
+
+                    {/* Nền tảng */}
                     <div>
                         <h3 className="text-white font-bold text-sm mb-6 uppercase tracking-[0.1em]">Nền tảng</h3>
                         <ul className="space-y-4 text-sm">
@@ -54,7 +54,7 @@ export default function Footer() {
                         </ul>
                     </div>
 
-
+                    {/* Hỗ trợ */}
                     <div>
                         <h3 className="text-white font-bold text-sm mb-6 uppercase tracking-[0.1em]">Hỗ trợ</h3>
                         <ul className="space-y-4 text-sm">
@@ -64,6 +64,8 @@ export default function Footer() {
                             <li><a href="#" className="hover:text-white transition-colors">Tài liệu API</a></li>
                         </ul>
                     </div>
+
+                    {/* Liên hệ */}
                     <div>
                         <h3 className="text-white font-bold text-sm mb-6 uppercase tracking-[0.1em]">Liên hệ</h3>
                         <div className="space-y-4 text-sm">
@@ -89,7 +91,17 @@ export default function Footer() {
                             </div>
                         </div>
                     </div>
+                </div>
 
+                {/* Bottom Centered Logo */}
+                <div className="flex flex-col items-center mt-6">
+                    <Image 
+                        src="/icon.png" 
+                        alt="Logo" 
+                        width={140} 
+                        height={140} 
+                        className="object-contain"
+                    />
                 </div>
             </div>
 
