@@ -10,30 +10,39 @@ def mock_dependencies():
         yield
 
 
-from src.main import app
-from src.auth.jwt_handler import create_access_token
+@pytest.fixture(scope="module")
+def app():
+    # Import inside the fixture to ensure any module-level mocks are applied
+    # and to avoid side effects during test collection
+    from src.main import app
+    return app
 
-client = TestClient(app)
+
+@pytest.fixture(scope="module")
+def client(app):
+    return TestClient(app)
 
 
-def test_root():
+def test_root(client):
     response = client.get("/")
     assert response.status_code == 200
     assert response.json() == {"message": "Welcome to the AWS-FCJ-Backend API"}
 
 
-def test_health_check():
+def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
 
 
-def test_me_requires_bearer_token():
+def test_me_requires_bearer_token(client):
     response = client.get("/user-info")
     assert response.status_code in (401, 403)
 
 
-def test_me_returns_user_profile():
+def test_me_returns_user_profile(client):
+    from src.auth.jwt_handler import create_access_token
+
     token = create_access_token(data={"sub": "me@example.com"})
 
     with patch(
@@ -58,7 +67,9 @@ def test_me_returns_user_profile():
         assert data["role"] == "admin"
 
 
-def test_me_404_when_user_missing():
+def test_me_404_when_user_missing(client):
+    from src.auth.jwt_handler import create_access_token
+
     token = create_access_token(data={"sub": "missing@example.com"})
 
     with patch(

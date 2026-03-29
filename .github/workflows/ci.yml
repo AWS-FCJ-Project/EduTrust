@@ -58,6 +58,15 @@ jobs:
 
       - name: Run unit tests
         working-directory: AWS-FCJ-Project/backend
+        env:
+          OPENAI_API_KEY: dummy
+          TAVILY_API_KEY: dummy
+          LITELLM_API_KEY: dummy
+          TRANSLATE_MODEL: gpt-3.5-turbo
+          AGENT_MODEL: gpt-3.5-turbo
+          ORCHESTRATOR_MODEL: gpt-3.5-turbo
+          AGENTS_CONFIG_PATH: src/agent/agents_config.yaml
+          LLMS_CONFIG_PATH: src/llms_config.yaml
         run: |
           PYTHONPATH=src uv run pytest tests -v --maxfail=1 --disable-warnings
 
