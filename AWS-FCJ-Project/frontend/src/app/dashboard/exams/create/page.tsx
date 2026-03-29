@@ -1,15 +1,31 @@
 "use client";
 
 import React, { useEffect, useState, Suspense } from 'react';
-import { Save, ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Save, ArrowLeft, Loader2, Plus, Trash2, Search, Check } from 'lucide-react';
 import TimePicker from '@/components/ui/TimePicker';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Cookies from 'js-cookie';
 
+const SUBJECTS = [
+    "Toán học", "Vật lí", "Hóa học", "Sinh học", "Ngữ văn", 
+    "Lịch sử", "Địa lí", "Tiếng Anh", "Công nghệ", "Tin học", 
+    "Giáo dục kinh tế và pháp luật", "Giáo dục thể chất", "Giáo dục quốc phòng và an ninh"
+];
+
+const EXAM_TYPES = [
+    "Kiểm tra miệng", "Kiểm tra 15 phút", "Kiểm tra 1 tiết", "Kiểm giữa kỳ", "Kiểm học kỳ"
+];
+
 const CreateExamForm = () => {
     const searchParams = useSearchParams();
     const preselectedClassId = searchParams.get('class_id');
+
+    const autoResize = (e: any) => {
+        const element = e.target;
+        element.style.height = 'auto';
+        element.style.height = (element.scrollHeight) + 'px';
+    };
     
     const [loading, setLoading] = useState(false);
     const [classes, setClasses] = useState<any[]>([]);
@@ -17,6 +33,7 @@ const CreateExamForm = () => {
         title: '',
         description: '',
         subject: '',
+        exam_type: 'Kiểm tra 15 phút',
         class_id: '',
         start_date: '',
         start_time: '',
@@ -25,6 +42,13 @@ const CreateExamForm = () => {
         duration: '',
         questions: [{ q: '', options: ['', '', '', ''], correct: 0 }]
     });
+
+    const [subjectSearch, setSubjectSearch] = useState('');
+    const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
+
+    const filteredSubjects = SUBJECTS.filter(s => 
+        s.toLowerCase().includes(subjectSearch.toLowerCase())
+    );
 
     useEffect(() => {
         const fetchClasses = async () => {
@@ -48,6 +72,20 @@ const CreateExamForm = () => {
         };
         fetchClasses();
     }, [preselectedClassId]);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (showSubjectDropdown && !(e.target as HTMLElement).closest('.subject-selection')) {
+                setShowSubjectDropdown(false);
+                // If they typed something and didn't select, and it's not a valid subject, reset the display
+                if (subjectSearch && !SUBJECTS.includes(subjectSearch)) {
+                    // Stay valid if it's already selected
+                }
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showSubjectDropdown, subjectSearch]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -80,6 +118,13 @@ const CreateExamForm = () => {
                 end_time: finalEnd,
                 duration: parseInt(formData.duration) || 0
             };
+
+            // Ensure subject is valid
+            if (!SUBJECTS.includes(payload.subject)) {
+                alert("Vui lòng chọn môn học từ danh sách");
+                setLoading(false);
+                return;
+            }
 
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/exams`, {
                 method: 'POST',
@@ -133,21 +178,83 @@ const CreateExamForm = () => {
                                 placeholder="VD: Kiểm tra giữa kỳ Hóa học"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-2">Môn học</label>
-                            <input 
-                                required
-                                type="text" 
-                                value={formData.subject}
-                                onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                                className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold"
-                                placeholder="VD: Hóa học"
-                            />
+                        <div className="space-y-2 relative subject-selection">
+                            <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-2 flex justify-between">
+                                <span>Môn học</span>
+                                {formData.subject && <span className="text-[#005B19] text-[10px] font-black uppercase tracking-widest">Đã chọn</span>}
+                            </label>
+                            <div className="relative">
+                                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <input 
+                                    required
+                                    type="text" 
+                                    value={subjectSearch}
+                                    onFocus={() => {
+                                        setShowSubjectDropdown(true);
+                                    }}
+                                    onChange={(e) => {
+                                        setSubjectSearch(e.target.value);
+                                        setFormData({ ...formData, subject: '' });
+                                        setShowSubjectDropdown(true);
+                                    }}
+                                    className={`w-full pl-14 pr-14 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 transition-all font-bold ${
+                                        formData.subject ? 'focus:ring-[#005B19]/20' : 'focus:ring-[#5B0019]'
+                                    }`}
+                                    placeholder="Tìm kiếm môn học..."
+                                />
+                                {subjectSearch && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            setSubjectSearch('');
+                                            setFormData({ ...formData, subject: '' });
+                                        }}
+                                        className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        <Plus className="rotate-45" size={20} />
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {showSubjectDropdown && (
+                                <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 max-h-60 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-gray-200">
+                                    {filteredSubjects.length > 0 ? filteredSubjects.map(subject => (
+                                        <button
+                                            key={subject}
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData({ ...formData, subject });
+                                                setSubjectSearch(subject);
+                                                setShowSubjectDropdown(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 flex items-center justify-between group transition-colors"
+                                        >
+                                            <span className={`font-bold ${formData.subject === subject ? 'text-[#005B19]' : 'text-gray-600'}`}>{subject}</span>
+                                            {formData.subject === subject && <Check size={16} className="text-[#005B19]" />}
+                                        </button>
+                                    )) : (
+                                        <div className="px-4 py-3 text-gray-400 font-bold text-center">Không tìm thấy môn học</div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
-                         <div className="space-y-2 max-w-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-2">
+                            <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-2">Loại bài thi</label>
+                            <select 
+                                required
+                                value={formData.exam_type}
+                                onChange={(e) => setFormData({...formData, exam_type: e.target.value})}
+                                className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-[#5B0019]"
+                            >
+                                {EXAM_TYPES.map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
+                            </select>
+                        </div>
+                         <div className="space-y-2">
                             <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-2">Lớp học</label>
                             <select 
                                 required
@@ -161,73 +268,73 @@ const CreateExamForm = () => {
                                 ))}
                             </select>
                         </div>
+                    </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4">
-                            {/* Start Time Section */}
-                            <div className="space-y-4 p-6 bg-gray-50/50 rounded-[2rem] border border-gray-100">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Bắt đầu</label>
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            const now = new Date();
-                                            setFormData({
-                                                ...formData, 
-                                                start_date: now.toISOString().split('T')[0],
-                                                start_time: now.toLocaleTimeString('vi-VN', {hour12: false, hour: '2-digit', minute: '2-digit'})
-                                            });
-                                        }}
-                                        className="text-[10px] font-black text-[#5B0019] uppercase tracking-tighter hover:underline"
-                                    >Thời gian hiện tại</button>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <input 
-                                        type="date" 
-                                        value={formData.start_date}
-                                        onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-                                        className="flex-1 px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
-                                    />
-                                    <TimePicker 
-                                        value={formData.start_time}
-                                        onChange={(val) => setFormData({...formData, start_time: val})}
-                                        className="w-32"
-                                    />
-                                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4">
+                        {/* Start Time Section */}
+                        <div className="space-y-4 p-6 bg-gray-50/50 rounded-[2rem] border border-gray-100">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Bắt đầu</label>
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        const now = new Date();
+                                        setFormData({
+                                            ...formData, 
+                                            start_date: now.toISOString().split('T')[0],
+                                            start_time: now.toLocaleTimeString('vi-VN', {hour12: false, hour: '2-digit', minute: '2-digit'})
+                                        });
+                                    }}
+                                    className="text-[10px] font-black text-[#5B0019] uppercase tracking-tighter hover:underline"
+                                >Thời gian hiện tại</button>
                             </div>
-
-                            {/* End Time Section */}
-                            <div className="space-y-4 p-6 bg-gray-50/50 rounded-[2rem] border border-gray-100">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Kết thúc</label>
-                                <div className="flex items-center gap-4">
-                                    <input 
-                                        type="date" 
-                                        value={formData.end_date}
-                                        onChange={(e) => setFormData({...formData, end_date: e.target.value})}
-                                        className="flex-1 px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
-                                    />
-                                    <TimePicker 
-                                        value={formData.end_time}
-                                        onChange={(val) => setFormData({...formData, end_time: val})}
-                                        className="w-32"
-                                    />
-                                </div>
+                            <div className="flex items-center gap-4">
+                                <input 
+                                    type="date" 
+                                    value={formData.start_date}
+                                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                                    className="flex-1 px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
+                                />
+                                <TimePicker 
+                                    value={formData.start_time}
+                                    onChange={(val) => setFormData({...formData, start_time: val})}
+                                    className="w-32"
+                                />
                             </div>
                         </div>
 
-                        <div className="space-y-2 pt-6">
-                            <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-2">Thời gian làm bài (Phút)</label>
-                            <input 
-                                type="text" 
-                                inputMode="numeric"
-                                value={formData.duration}
-                                onChange={(e) => {
-                                    const val = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
-                                    setFormData({...formData, duration: val});
-                                }}
-                                className="max-w-xs px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-xl"
-                                placeholder="Nhập thời gian làm bài"
-                            />
+                        {/* End Time Section */}
+                        <div className="space-y-4 p-6 bg-gray-50/50 rounded-[2rem] border border-gray-100">
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Kết thúc</label>
+                            <div className="flex items-center gap-4">
+                                <input 
+                                    type="date" 
+                                    value={formData.end_date}
+                                    onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                                    className="flex-1 px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
+                                />
+                                <TimePicker 
+                                    value={formData.end_time}
+                                    onChange={(val) => setFormData({...formData, end_time: val})}
+                                    className="w-32"
+                                />
+                            </div>
                         </div>
+                    </div>
+
+                    <div className="space-y-2 pt-6">
+                        <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-2">Thời gian làm bài (Phút)</label>
+                        <input 
+                            type="text" 
+                            inputMode="numeric"
+                            value={formData.duration}
+                            onChange={(e) => {
+                                const val = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+                                setFormData({...formData, duration: val});
+                            }}
+                            className="max-w-xs px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-xl"
+                            placeholder="Nhập thời gian làm bài"
+                        />
                     </div>
                 </div>
 
@@ -251,14 +358,17 @@ const CreateExamForm = () => {
                             </div>
                             <textarea 
                                 required
-                                className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold italic text-sm"
+                                rows={1}
+                                className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold italic text-sm resize-none overflow-hidden break-words"
                                 placeholder="Nhập nội dung câu hỏi..."
                                 value={q.q}
                                 onChange={(e) => {
                                     const newQ = [...formData.questions];
                                     newQ[qIdx].q = e.target.value;
                                     setFormData({...formData, questions: newQ});
+                                    autoResize(e);
                                 }}
+                                onFocus={(e) => autoResize(e)}
                             />
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {q.options.map((opt: string, oIdx: number) => (
@@ -278,17 +388,19 @@ const CreateExamForm = () => {
                                             />
                                             {q.correct === oIdx && <span className="text-[7px] font-black text-[#5B0019] uppercase">Đúng</span>}
                                         </div>
-                                        <input 
+                                        <textarea 
                                             required
-                                            type="text"
+                                            rows={1}
                                             placeholder={`Đáp án ${oIdx + 1}`}
                                             value={opt}
                                             onChange={(e) => {
                                                 const newQ = [...formData.questions];
                                                 newQ[qIdx].options[oIdx] = e.target.value;
                                                 setFormData({...formData, questions: newQ});
+                                                autoResize(e);
                                             }}
-                                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold"
+                                            onFocus={(e) => autoResize(e)}
+                                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold resize-none overflow-hidden break-words py-1"
                                         />
                                     </div>
                                 ))}

@@ -1,16 +1,27 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Eye, Edit, Trash2, Plus, Clock, FileText, CheckCircle2, Loader2, X, Save, AlertTriangle, PlusCircle, Calendar, GraduationCap, LayoutGrid, ListFilter, ArrowRight, BookOpen, User } from 'lucide-react';
+import { Eye, Edit, Trash2, Plus, Clock, FileText, CheckCircle2, Loader2, X, Save, AlertTriangle, PlusCircle, Calendar, GraduationCap, LayoutGrid, ListFilter, ArrowRight, BookOpen, User, Search, Check } from 'lucide-react';
 import TimePicker from '@/components/ui/TimePicker';
 import Link from 'next/link';
 import Cookies from 'js-cookie';
+
+const SUBJECTS = [
+    "Toán học", "Vật lí", "Hóa học", "Sinh học", "Ngữ văn", 
+    "Lịch sử", "Địa lí", "Tiếng Anh", "Công nghệ", "Tin học", 
+    "Giáo dục kinh tế và pháp luật", "Giáo dục thể chất", "Giáo dục quốc phòng và an ninh"
+];
+
+const EXAM_TYPES = [
+    "Kiểm tra miệng", "Kiểm tra 15 phút", "Kiểm tra 1 tiết", "Kiểm giữa kỳ", "Kiểm học kỳ"
+];
 
 interface ExamItem {
     id: string;
     title: string;
     description: string;
     subject: string;
+    exam_type: string;
     class_id: string;
     start_time: string;
     end_time: string;
@@ -33,6 +44,45 @@ const TeacherExams: React.FC = () => {
     const [editingExam, setEditingExam] = useState<ExamItem | null>(null);
     const [deletingExam, setDeletingExam] = useState<ExamItem | null>(null);
     const [isActionLoading, setIsActionLoading] = useState(false);
+    
+    const [subjectSearch, setSubjectSearch] = useState('');
+    const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
+    const [lastExamId, setLastExamId] = useState<string | null>(null);
+
+    const autoResize = (e: any) => {
+        const element = typeof e === 'object' && e.target ? e.target : e;
+        if (!element) return;
+        element.style.height = 'auto';
+        element.style.height = (element.scrollHeight) + 'px';
+    };
+
+    const filteredSubjects = SUBJECTS.filter(s => 
+        s.toLowerCase().includes(subjectSearch.toLowerCase())
+    );
+
+    // Sync subjectSearch only when a NEW exam is selected for editing
+    useEffect(() => {
+        if (editingExam) {
+            if (editingExam.id !== lastExamId) {
+                setSubjectSearch(editingExam.subject || '');
+                setLastExamId(editingExam.id);
+            }
+        } else {
+            setSubjectSearch('');
+            setLastExamId(null);
+            setShowSubjectDropdown(false);
+        }
+    }, [editingExam, lastExamId]);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (showSubjectDropdown && !(e.target as HTMLElement).closest('.subject-selection')) {
+                setShowSubjectDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showSubjectDropdown]);
 
     const fetchData = async () => {
         try {
@@ -129,8 +179,16 @@ const TeacherExams: React.FC = () => {
                 ...editingExam,
                 start_time: finalStart,
                 end_time: finalEnd,
-                duration: parseInt(editingExam.duration as string) || 0
+                duration: parseInt(editingExam.duration as string) || 0,
+                exam_type: editingExam.exam_type || 'Kiểm tra 15 phút'
             };
+
+            // Ensure subject is valid
+            if (!SUBJECTS.includes(payload.subject)) {
+                alert("Vui lòng chọn môn học từ danh sách");
+                setIsActionLoading(false);
+                return;
+            }
 
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/exams/${editingExam.id}`, {
                 method: 'PATCH',
@@ -268,9 +326,11 @@ const TeacherExams: React.FC = () => {
                                                     </div>
                                                     <div className="space-y-1">
                                                         <h3 className="text-xl font-black text-gray-800 leading-tight line-clamp-2">{exam.title}</h3>
-                                                        <p className="text-xs text-gray-400 font-bold line-clamp-1 italic tracking-wide">
-                                                            {exam.description || 'Không có mô tả chi tiết'}
-                                                        </p>
+                                                        {exam.description && (
+                                                            <p className="text-xs text-gray-400 font-bold line-clamp-1 italic tracking-wide">
+                                                                {exam.description}
+                                                            </p>
+                                                        )}
                                                     </div>
 
                                                     <div className="pt-6 space-y-2">
@@ -360,20 +420,82 @@ const TeacherExams: React.FC = () => {
                                             className="w-full px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold"
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Môn học</label>
-                                        <input 
-                                            required
-                                            type="text" 
-                                            value={editingExam.subject}
-                                            onChange={(e) => setEditingExam({...editingExam, subject: e.target.value})}
-                                            className="w-full px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold"
-                                        />
+                                    <div className="space-y-2 relative subject-selection">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2 flex justify-between">
+                                            <span>Môn học</span>
+                                            {SUBJECTS.includes(editingExam.subject) && <span className="text-[#005B19] text-[8px] font-black uppercase tracking-widest">Đã chọn</span>}
+                                        </label>
+                                        <div className="relative">
+                                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input 
+                                                required
+                                                type="text" 
+                                                value={subjectSearch}
+                                                onFocus={() => setShowSubjectDropdown(true)}
+                                                onChange={(e) => {
+                                                    setSubjectSearch(e.target.value);
+                                                    setEditingExam({ ...editingExam, subject: '' });
+                                                    setShowSubjectDropdown(true);
+                                                }}
+                                                className={`w-full pl-14 pr-12 py-4 bg-white border-none rounded-2xl focus:ring-2 transition-all font-bold ${
+                                                    SUBJECTS.includes(editingExam.subject) ? 'focus:ring-[#005B19]/20' : 'focus:ring-[#5B0019]'
+                                                }`}
+                                                placeholder="Tìm kiếm môn học..."
+                                            />
+                                            {subjectSearch && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSubjectSearch('');
+                                                        setEditingExam({ ...editingExam, subject: '' });
+                                                    }}
+                                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                                >
+                                                    <Plus className="rotate-45" size={18} />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {showSubjectDropdown && (
+                                            <div className="absolute z-[100] w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-60 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-gray-200">
+                                                {filteredSubjects.length > 0 ? filteredSubjects.map(subject => (
+                                                    <button
+                                                        key={subject}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditingExam({ ...editingExam, subject });
+                                                            setSubjectSearch(subject);
+                                                            setShowSubjectDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 flex items-center justify-between group transition-colors"
+                                                    >
+                                                        <span className={`font-bold ${editingExam.subject === subject ? 'text-[#005B19]' : 'text-gray-600'}`}>{subject}</span>
+                                                        {editingExam.subject === subject && <Check size={14} className="text-[#005B19]" />}
+                                                    </button>
+                                                )) : (
+                                                    <div className="px-4 py-3 text-gray-400 font-bold text-center">Không tìm thấy môn học</div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
-                                    <div className="space-y-2 max-w-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Loại đề thi</label>
+                                        <select 
+                                            required
+                                            value={editingExam.exam_type || 'Kiểm tra 15 phút'}
+                                            onChange={(e) => setEditingExam({...editingExam, exam_type: e.target.value})}
+                                            className="w-full px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold appearance-none cursor-pointer"
+                                        >
+                                            {EXAM_TYPES.map(type => (
+                                                <option key={type} value={type}>{type}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Lớp học</label>
                                         <select 
                                             required
@@ -387,73 +509,57 @@ const TeacherExams: React.FC = () => {
                                             ))}
                                         </select>
                                     </div>
+                                </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4">
-                                        {/* Start Date/Time */}
-                                        <div className="space-y-4 p-6 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
-                                            <div className="flex items-center justify-between">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Bắt đầu</label>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const now = new Date();
-                                                        setEditingExam({
-                                                            ...editingExam, 
-                                                            start_date: now.toISOString().split('T')[0],
-                                                            start_time_only: now.toLocaleTimeString('vi-VN', {hour12: false, hour: '2-digit', minute: '2-digit'})
-                                                        });
-                                                    }}
-                                                    className="text-[8px] font-black text-[#5B0019] uppercase tracking-tighter hover:underline"
-                                                >Thời gian hiện tại</button>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <input 
-                                                    type="date" 
-                                                    value={editingExam.start_date || (editingExam.start_time ? new Date(editingExam.start_time).toLocaleDateString('en-CA') : '')}
-                                                    onChange={(e) => setEditingExam({...editingExam, start_date: e.target.value})}
-                                                    className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
-                                                />
-                                                <TimePicker 
-                                                    value={editingExam.start_time_only || (editingExam.start_time ? new Date(editingExam.start_time).toLocaleTimeString('vi-VN', {hour12: false, hour: '2-digit', minute: '2-digit'}) : '')}
-                                                    onChange={(val) => setEditingExam({...editingExam, start_time_only: val})}
-                                                    className="w-32"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* End Date/Time */}
-                                        <div className="space-y-4 p-6 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Kết thúc</label>
-                                            <div className="flex items-center gap-4">
-                                                <input 
-                                                    type="date" 
-                                                    value={editingExam.end_date || (editingExam.end_time ? new Date(editingExam.end_time).toLocaleDateString('en-CA') : '')}
-                                                    onChange={(e) => setEditingExam({...editingExam, end_date: e.target.value})}
-                                                    className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
-                                                />
-                                                <TimePicker 
-                                                    value={editingExam.end_time_only || (editingExam.end_time ? new Date(editingExam.end_time).toLocaleTimeString('vi-VN', {hour12: false, hour: '2-digit', minute: '2-digit'}) : '00:00')}
-                                                    onChange={(val) => setEditingExam({...editingExam, end_time_only: val})}
-                                                    className="w-32"
-                                                />
-                                            </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4">
+                                    <div className="space-y-4 p-6 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Bắt đầu</label>
+                                        <div className="flex items-center gap-4">
+                                            <input 
+                                                type="date" 
+                                                value={editingExam.start_date || (editingExam.start_time ? new Date(editingExam.start_time).toLocaleDateString('en-CA') : '')}
+                                                onChange={(e) => setEditingExam({...editingExam, start_date: e.target.value})}
+                                                className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
+                                            />
+                                            <TimePicker 
+                                                value={editingExam.start_time_only || (editingExam.start_time ? new Date(editingExam.start_time).toLocaleTimeString('vi-VN', {hour12: false, hour: '2-digit', minute: '2-digit'}) : '')}
+                                                onChange={(val) => setEditingExam({...editingExam, start_time_only: val})}
+                                                className="w-32"
+                                            />
                                         </div>
                                     </div>
 
-                                    <div className="space-y-2 pt-4">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Thời gian làm bài (Phút)</label>
-                                        <input 
-                                            type="text" 
-                                            inputMode="numeric"
-                                            value={editingExam.duration === 0 ? '' : editingExam.duration}
-                                            onChange={(e) => {
-                                                const val = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
-                                                setEditingExam({...editingExam, duration: val === '' ? 0 : val});
-                                            }}
-                                            className="max-w-xs px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-xl"
-                                            placeholder="Nhập thời gian làm bài"
-                                        />
+                                    <div className="space-y-4 p-6 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Ngày Kết thúc</label>
+                                        <div className="flex items-center gap-4">
+                                            <input 
+                                                type="date" 
+                                                value={editingExam.end_date || (editingExam.end_time ? new Date(editingExam.end_time).toLocaleDateString('en-CA') : '')}
+                                                onChange={(e) => setEditingExam({...editingExam, end_date: e.target.value})}
+                                                className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-sm"
+                                            />
+                                            <TimePicker 
+                                                value={editingExam.end_time_only || (editingExam.end_time ? new Date(editingExam.end_time).toLocaleTimeString('vi-VN', {hour12: false, hour: '2-digit', minute: '2-digit'}) : '00:00')}
+                                                onChange={(val) => setEditingExam({...editingExam, end_time_only: val})}
+                                                className="w-32"
+                                            />
+                                        </div>
                                     </div>
+                                </div>
+
+                                <div className="space-y-2 pt-4">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Thời gian làm bài (Phút)</label>
+                                    <input 
+                                        type="text" 
+                                        inputMode="numeric"
+                                        value={editingExam.duration === 0 ? '' : editingExam.duration}
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+                                            setEditingExam({...editingExam, duration: val === '' ? 0 : val});
+                                        }}
+                                        className="max-w-xs px-6 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold text-xl"
+                                        placeholder="Nhập thời gian làm bài"
+                                    />
                                 </div>
                             </div>
 
@@ -484,14 +590,17 @@ const TeacherExams: React.FC = () => {
                                             </div>
                                             <textarea 
                                                 required
+                                                rows={1}
                                                 placeholder="Nội dung câu hỏi..."
                                                 value={q.q}
                                                 onChange={(e) => {
                                                     const newQ = [...editingExam.questions];
                                                     newQ[qIdx].q = e.target.value;
                                                     setEditingExam({...editingExam, questions: newQ});
+                                                    autoResize(e);
                                                 }}
-                                                className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold italic text-sm"
+                                                onFocus={(e) => autoResize(e)}
+                                                className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#5B0019] transition-all font-bold italic text-sm resize-none overflow-hidden break-words"
                                             />
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 {q.options.map((opt: string, oIdx: number) => (
@@ -511,16 +620,19 @@ const TeacherExams: React.FC = () => {
                                                             />
                                                             {q.correct === oIdx && <span className="text-[7px] font-black text-[#5B0019] uppercase">Đúng</span>}
                                                         </div>
-                                                        <input 
+                                                        <textarea 
                                                             required
+                                                            rows={1}
                                                             placeholder={`Đáp án ${oIdx + 1}`}
                                                             value={opt}
                                                             onChange={(e) => {
                                                                 const newQ = [...editingExam.questions];
                                                                 newQ[qIdx].options[oIdx] = e.target.value;
                                                                 setEditingExam({...editingExam, questions: newQ});
+                                                                autoResize(e);
                                                             }}
-                                                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold"
+                                                            onFocus={(e) => autoResize(e)}
+                                                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold resize-none overflow-hidden break-words"
                                                         />
                                                     </div>
                                                 ))}
