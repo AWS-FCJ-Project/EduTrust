@@ -45,6 +45,19 @@ resource "aws_s3_bucket" "frontend" {
   bucket = var.frontend_bucket_name
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  rule {
+    id     = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket                  = aws_s3_bucket.frontend.id
   block_public_acls       = true
@@ -86,6 +99,23 @@ data "aws_elb_service_account" "main" {}
 resource "aws_s3_bucket" "alb_logs" {
   bucket        = "${var.ec2_instance_name}-alb-logs-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  rule {
+    id     = "log-expiration"
+    status = "Enabled"
+
+    expiration {
+      days = 90
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
