@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import os
+import secrets
 from typing import List, Optional
 
 from bson import ObjectId
@@ -13,6 +15,7 @@ from src.database import (
 )
 from src.schemas.school_schemas import (
     ExamCreate,
+    ExamKeyVerify,
     ExamResponse,
     ExamStatusResponse,
     ExamSubmission,
@@ -22,8 +25,8 @@ from src.schemas.school_schemas import (
 router = APIRouter(prefix="/exams", tags=["Exams"])
 
 
-def exam_helper(exam) -> dict:
-    return {
+def exam_helper(exam, include_secret: bool = False) -> dict:
+    result = {
         "id": str(exam["_id"]),
         "title": exam["title"],
         "description": exam.get("description"),
@@ -33,8 +36,12 @@ def exam_helper(exam) -> dict:
         "start_time": exam["start_time"],
         "end_time": exam["end_time"],
         "duration": exam.get("duration", 60),
+        "has_secret_key": bool(exam.get("secret_key")),
         "questions": exam.get("questions", []),
     }
+    if include_secret:
+        result["secret_key"] = exam.get("secret_key")
+    return result
 
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -68,8 +75,17 @@ async def create_exam(
 
     new_exam = exam_data.model_dump()
     new_exam["teacher_id"] = user_id
+
+    # Auto-generate a secret key if not provided
+    if not new_exam.get("secret_key"):
+        new_exam["secret_key"] = secrets.token_hex(3).upper()  # e.g. "A1B2C3"
+
     result = await exams_collection.insert_one(new_exam)
-    return {"id": str(result.inserted_id), "message": "Exam created successfully"}
+    return {
+        "id": str(result.inserted_id),
+        "secret_key": new_exam["secret_key"],
+        "message": "Exam created successfully",
+    }
 
 
 @router.get("", response_model=List[dict])
@@ -124,6 +140,36 @@ async def get_exams(current_user: dict = Depends(get_current_user)):
                 e_dict["status"] = "pending"
         exams.append(e_dict)
     return exams
+
+
+@router.post("/{exam_id}/verify-key", response_model=dict)
+async def verify_exam_key(
+    exam_id: str,
+    body: ExamKeyVerify,
+    current_user: dict = Depends(get_current_user),
+):
+    """Verify the secret key before a student enters the exam."""
+    if current_user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Only students can verify exam keys")
+
+    if not ObjectId.is_valid(exam_id):
+        raise HTTPException(status_code=400, detail="Invalid exam ID")
+
+    exam = await exams_collection.find_one({"_id": ObjectId(exam_id)})
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    stored_key = exam.get("secret_key", "")
+    provided_key = body.key.strip().upper()
+
+    if not stored_key:
+        # No key set → allow entry freely
+        return {"valid": True}
+
+    if provided_key != stored_key.upper():
+        raise HTTPException(status_code=400, detail="Mã đề thi không đúng. Vui lòng kiểm tra lại.")
+
+    return {"valid": True}
 
 
 @router.get("/{exam_id}/status", response_model=ExamStatusResponse)
@@ -292,7 +338,9 @@ async def get_exam(exam_id: str, current_user: dict = Depends(get_current_user))
     if not has_permission:
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    return exam_helper(exam)
+    # Include secret key for teacher/admin
+    include_secret = role in ["teacher", "admin"]
+    return exam_helper(exam, include_secret=include_secret)
 
 
 @router.patch("/{exam_id}", response_model=dict)
@@ -369,6 +417,66 @@ async def delete_exam(exam_id: str, current_user: dict = Depends(get_current_use
 
     await exams_collection.delete_one({"_id": ObjectId(exam_id)})
     return {"message": "Exam deleted successfully"}
+
+
+@router.get("/{exam_id}/secret-key", response_model=dict)
+async def get_exam_secret_key(
+    exam_id: str, current_user: dict = Depends(get_current_user)
+):
+    """Get the secret key of an exam (teacher/admin only)."""
+    role = current_user.get("role")
+    if role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if not ObjectId.is_valid(exam_id):
+        raise HTTPException(status_code=400, detail="Invalid exam ID")
+
+    exam = await exams_collection.find_one({"_id": ObjectId(exam_id)})
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    user_id = str(current_user["_id"])
+    if role == "teacher":
+        if exam["teacher_id"] != user_id:
+            cls = await classes_collection.find_one(
+                {"_id": ObjectId(exam["class_id"]), "homeroom_teacher_id": user_id}
+            )
+            if not cls:
+                raise HTTPException(status_code=403, detail="Permission denied")
+
+    return {"secret_key": exam.get("secret_key")}
+
+
+@router.post("/{exam_id}/regenerate-key", response_model=dict)
+async def regenerate_exam_secret_key(
+    exam_id: str, current_user: dict = Depends(get_current_user)
+):
+    """Regenerate the secret key for an exam (teacher/admin only)."""
+    role = current_user.get("role")
+    if role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if not ObjectId.is_valid(exam_id):
+        raise HTTPException(status_code=400, detail="Invalid exam ID")
+
+    exam = await exams_collection.find_one({"_id": ObjectId(exam_id)})
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    user_id = str(current_user["_id"])
+    if role == "teacher":
+        if exam["teacher_id"] != user_id:
+            cls = await classes_collection.find_one(
+                {"_id": ObjectId(exam["class_id"]), "homeroom_teacher_id": user_id}
+            )
+            if not cls:
+                raise HTTPException(status_code=403, detail="Permission denied")
+
+    new_key = secrets.token_hex(3).upper()
+    await exams_collection.update_one(
+        {"_id": ObjectId(exam_id)}, {"$set": {"secret_key": new_key}}
+    )
+    return {"secret_key": new_key, "message": "Secret key regenerated successfully"}
 
 
 @router.get("/violations/all", response_model=List[dict])

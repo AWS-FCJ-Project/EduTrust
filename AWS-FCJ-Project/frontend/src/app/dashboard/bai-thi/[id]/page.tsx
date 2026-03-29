@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
     ChevronLeft, ChevronRight, Send,
-    LayoutGrid, Trophy, Clock, Camera, X, AlertTriangle, Loader2, Activity, CheckCircle
+    LayoutGrid, Trophy, Clock, Camera, X, AlertTriangle, Loader2, Activity, CheckCircle, KeyRound, ArrowLeft
 } from 'lucide-react';
 import CameraMonitor from '@/components/camera/CameraMonitor';
 import Cookies from 'js-cookie';
@@ -24,12 +24,18 @@ const ExamPage = () => {
     const [selectedAnswers, setSelectedAnswers] = useState<SelectedAnswers>({});
     const [timeLeft, setTimeLeft] = useState<number>(0);
     const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
-    const [isStarted, setIsStarted] = useState(false);
+    // 3-step flow: 'camera' → 'key' → 'exam'
+    type ExamStep = 'camera' | 'key' | 'exam';
+    const [examStep, setExamStep] = useState<ExamStep>('camera');
     const [cameraStatus, setCameraStatus] = useState("Initializing...");
     const [violationCount, setViolationCount] = useState(0);
     const [showCheatModal, setShowCheatModal] = useState(false);
     const [exitCountdown, setExitCountdown] = useState(5);
     const [isGracePeriod, setIsGracePeriod] = useState(false);
+    // Key entry step
+    const [keyInput, setKeyInput] = useState('');
+    const [keyError, setKeyError] = useState('');
+    const [keyLoading, setKeyLoading] = useState(false);
     
     const mainContentRef = useRef<HTMLDivElement>(null);
     const cameraSourceRef = useRef<HTMLDivElement>(null);
@@ -118,11 +124,14 @@ const ExamPage = () => {
     // --- 2. Camera Positioning ---
     useEffect(() => {
         const source = cameraSourceRef.current;
-        const target = isStarted ? sidebarTargetRef.current : centerTargetRef.current;
+        // centerTargetRef is inside the camera check overlay (unmounts when not in 'camera' step)
+        // sidebarTargetRef is always in the DOM → use it for 'key' and 'exam' steps
+        const target = examStep === 'camera' ? centerTargetRef.current : sidebarTargetRef.current;
         if (source && target) {
             target.appendChild(source);
         }
-    }, [isStarted, loading]);
+    }, [examStep, loading]);
+
 
     // --- 3. Sidebar Resizing ---
     const startResizing = useCallback(() => {
@@ -156,13 +165,13 @@ const ExamPage = () => {
 
     // --- 4. Timer Logic ---
     useEffect(() => {
-        if (isStarted && timeLeft > 0 && !isSubmitted) {
+        if (examStep === 'exam' && timeLeft > 0 && !isSubmitted) {
             const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
             return () => clearInterval(timer);
-        } else if (isStarted && timeLeft === 0 && !isSubmitted) {
+        } else if (examStep === 'exam' && timeLeft === 0 && !isSubmitted) {
             submitExam("completed");
         }
-    }, [timeLeft, isSubmitted, isStarted]);
+    }, [timeLeft, isSubmitted, examStep]);
 
     // --- 5. Cheat & Exit Handling ---
     useEffect(() => {
@@ -194,16 +203,37 @@ const ExamPage = () => {
         } catch (e) { console.error("Submit Error:", e); }
     };
 
-    const handleStartExam = useCallback(() => {
-        setIsStarted(true);
-        setIsGracePeriod(true);
-        setTimeout(() => {
-            setIsGracePeriod(false);
-        }, 2500); 
+    const handleCameraReady = useCallback(() => {
+        setExamStep('key');
     }, []);
 
+    const handleVerifyKey = async () => {
+        setKeyError('');
+        setKeyLoading(true);
+        try {
+            const token = Cookies.get('auth_token');
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/exams/${examId}/verify-key`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: keyInput.trim().toUpperCase() }),
+            });
+            if (res.ok) {
+                setExamStep('exam');
+                setIsGracePeriod(true);
+                setTimeout(() => setIsGracePeriod(false), 2500);
+            } else {
+                const data = await res.json().catch(() => ({}));
+                setKeyError(data.detail || 'Mã không đúng. Vui lòng thử lại.');
+            }
+        } catch {
+            setKeyError('Không thể kết nối máy chủ.');
+        } finally {
+            setKeyLoading(false);
+        }
+    };
+
     const handleViolation = useCallback((vList: string[]) => {
-        if (!isStarted || isGracePeriod || isSubmitted) return;
+        if (examStep !== 'exam' || isGracePeriod || isSubmitted) return;
         setViolationCount(prev => {
             const n = prev + 1;
             if (n >= 4) {
@@ -212,7 +242,7 @@ const ExamPage = () => {
             }
             return n;
         });
-    }, [isStarted, isGracePeriod, isSubmitted]);
+    }, [examStep, isGracePeriod, isSubmitted]);
 
     const formatTime = (seconds: number): string => {
         const h = Math.floor(seconds / 3600);
@@ -493,7 +523,7 @@ const ExamPage = () => {
                             <div ref={sidebarTargetRef} className="w-full" />
                         </div>
                         
-                        {!isStarted && (
+                        {examStep !== 'exam' && (
                             <div className="aspect-video bg-gray-100 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-200">
                                 <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest text-center px-4 animate-pulse">Đang chờ khởi tạo...</span>
                             </div>
@@ -507,8 +537,8 @@ const ExamPage = () => {
                 </aside>
             </div>
 
-            {/* Camera Check Screen (Modal Style) */}
-            {!isStarted && !isSubmitted && (
+            {/* Camera Check Screen */}
+            {examStep === 'camera' && !isSubmitted && (
                 <div className="fixed inset-0 z-[10001] bg-white flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-700">
                     <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
                         <div className="space-y-10">
@@ -540,7 +570,7 @@ const ExamPage = () => {
                             </div>
 
                             <button
-                                onClick={handleStartExam}
+                                onClick={handleCameraReady}
                                 disabled={cameraStatus !== "Ready"}
                                 className={`w-full py-6 rounded-3xl font-black text-xl shadow-2xl transition-all duration-500 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-4 ${
                                     cameraStatus === "Ready" 
@@ -571,6 +601,93 @@ const ExamPage = () => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Key Entry Screen */}
+            {examStep === 'key' && !isSubmitted && (
+                <div className="fixed inset-0 z-[10001] bg-white flex items-center justify-center p-6 animate-in fade-in slide-in-from-right-8 duration-500">
+                    <div className="max-w-lg w-full space-y-10">
+
+                        {/* Header */}
+                        <div className="space-y-4">
+                            <button
+                                onClick={() => setExamStep('camera')}
+                                className="flex items-center gap-2 text-gray-400 hover:text-gray-700 font-bold text-sm transition-colors"
+                            >
+                                <ArrowLeft size={18} /> Quay lại kiểm tra camera
+                            </button>
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-100">
+                                <KeyRound size={14} /> Xác thực mã đề thi
+                            </div>
+                            <h1 className="text-5xl font-black text-gray-900 leading-tight tracking-tight">
+                                Nhập <br />
+                                <span className="text-[#5B0019]">Mã Đề Thi</span>
+                            </h1>
+                            <p className="text-gray-500 text-lg leading-relaxed font-medium">
+                                Vui lòng nhập mã đề thi được giáo viên cung cấp để tiếp tục vào bài thi.
+                            </p>
+                        </div>
+
+                        {/* Key Input */}
+                        <div className="space-y-4">
+                            <div className={`relative rounded-3xl border-2 transition-all duration-300 overflow-hidden ${
+                                keyError ? 'border-red-400 bg-red-50/30' : 
+                                keyInput.length > 0 ? 'border-[#5B0019]/40 bg-[#5B0019]/3' : 
+                                'border-gray-200 bg-gray-50'
+                            }`}>
+                                <input
+                                    type="text"
+                                    maxLength={12}
+                                    value={keyInput}
+                                    autoFocus
+                                    onChange={(e) => {
+                                        setKeyInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+                                        setKeyError('');
+                                    }}
+                                    onKeyDown={(e) => e.key === 'Enter' && keyInput.length >= 1 && handleVerifyKey()}
+                                    placeholder="Nhập mã đề thi..."
+                                    className="w-full px-8 py-7 bg-transparent border-none text-4xl font-black tracking-[0.4em] text-center text-[#5B0019] placeholder:text-gray-300 placeholder:tracking-widest placeholder:text-2xl focus:outline-none focus:ring-0"
+                                />
+                                {keyInput.length > 0 && (
+                                    <button
+                                        onClick={() => setKeyInput('')}
+                                        className="absolute right-5 top-1/2 -translate-y-1/2 p-2 text-gray-300 hover:text-gray-500"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Error message */}
+                            {keyError && (
+                                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-2xl animate-in slide-in-from-top-2 duration-300">
+                                    <AlertTriangle size={18} className="text-red-500 shrink-0" />
+                                    <p className="text-sm font-bold text-red-600">{keyError}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Submit button */}
+                        <button
+                            onClick={handleVerifyKey}
+                            disabled={keyLoading || keyInput.length < 1}
+                            className={`w-full py-6 rounded-3xl font-black text-xl shadow-2xl transition-all duration-500 flex items-center justify-center gap-4 ${
+                                keyInput.length >= 1 && !keyLoading
+                                ? 'bg-[#5B0019] text-white hover:bg-black shadow-red-900/20 hover:scale-[1.02] active:scale-[0.98]'
+                                : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                            }`}
+                        >
+                            {keyLoading ? (
+                                <><Loader2 className="animate-spin" size={22} /> Đang xác thực...</>
+                            ) : (
+                                <>XÁC NHẬN & VÀO THI <KeyRound size={20} /></>
+                            )}
+                        </button>
+
+                        <p className="text-center text-xs text-gray-400 font-medium">
+                            Liên hệ giáo viên nếu bạn chưa nhận được mã đề thi
+                        </p>
                     </div>
                 </div>
             )}
@@ -612,7 +729,7 @@ const ExamPage = () => {
                         <CameraMonitor 
                             onViolation={handleViolation} 
                             onStatusChange={setCameraStatus} 
-                            isCheck={!isStarted}
+                            isCheck={examStep !== 'exam'}
                             isActive={!isSubmitted && !showCheatModal}
                             examId={examId}
                             studentId={user.id}
