@@ -5,7 +5,6 @@ on:
     workflows: ["Terraform Deploy"]
     types: [completed]
     branches: ["main", "feat/**"]
-  workflow_dispatch:
 
 permissions:
   contents: read

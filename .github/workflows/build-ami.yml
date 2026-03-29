@@ -6,15 +6,9 @@ on:
       - ".github/packer/**"
       - ".github/workflows/build-ami.yml"
   workflow_run:
-    workflows: ["CI", "Manual Full Pipeline Trigger"]
+    workflows: ["CI", "Deploy (EC2)"]
     types: [completed]
     branches: ["main", "feat/**"]
-  workflow_dispatch:
-    inputs:
-      packer_hash:
-        description: 'Optional: Provide a specific hash to tag the AMI'
-        required: false
-        type: string
 
 permissions:
   contents: read

@@ -1,0 +1,14 @@
+name: Deploy (EC2)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    name: Start Pipeline Chain
+    runs-on: ubuntu-latest
+    steps:
+      - name: Manual Trigger Header
+        run: |
+          echo "Activating full deployment pipeline..."
+          echo "Triggered by: ${{ github.actor }}"
