@@ -212,7 +212,7 @@ const ViolationsPage = () => {
                                                             </div>
                                                             {exam.hasTabSwitch && (
                                                                 <div className="px-3 py-1 bg-orange-100 text-orange-600 border border-orange-200 rounded-lg font-black text-[9px] uppercase tracking-[0.2em] shadow-sm">
-                                                                    ⚠️ THOÁT TAB
+                                                                    ⚠️ THOÁT TAB / CHỤP ẢNH
                                                                 </div>
                                                             )}
                                                         </div>
@@ -235,8 +235,8 @@ const ViolationsPage = () => {
                                                                     <ShieldAlert size={28} />
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-sm font-black text-gray-900 mb-1">HÀNH VI: THOÁT CỬA SỔ LÀM BÀI</p>
-                                                                    <p className="text-xs font-semibold text-gray-500 leading-relaxed uppercase tracking-widest">Hệ thống AI đã tự động thu bài và đánh trượt do học sinh rời khỏi màn hình thi ngay cả khi chưa đủ số lần vi phạm camera.</p>
+                                                                    <p className="text-sm font-black text-gray-900 mb-1">HÀNH VI: THOÁT TAB / CHỤP ẢNH MÀN HÌNH</p>
+                                                                    <p className="text-xs font-semibold text-gray-500 leading-relaxed uppercase tracking-widest">Hệ thống AI đã tự động thu bài và đánh trượt do học sinh chuyển/rời khỏi tab thi hoặc chụp màn hình bài thi ngay cả khi chưa đủ số lần vi phạm camera.</p>
                                                                 </div>
                                                             </div>
                                                         )}
