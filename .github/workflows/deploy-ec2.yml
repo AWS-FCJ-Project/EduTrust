@@ -327,8 +327,6 @@ jobs:
           file: AWS-FCJ-Project/Dockerfile
           push: true
           tags: ${{ steps.docker_tags.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy-frontend:
     name: Build & Deploy Frontend (S3)
