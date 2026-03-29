@@ -153,16 +153,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      - name: Create Plugin Cache Dir
-        run: mkdir -p ~/.terraform.d/plugin-cache
 
-      - name: Cache Terraform plugins
-        uses: actions/cache@v4
-        with:
-          path: ~/.terraform.d/plugin-cache
-          key: ${{ runner.os }}-terraform-${{ hashFiles('.github/terraform/**/*.tf') }}
-          restore-keys: |
-            ${{ runner.os }}-terraform-
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
