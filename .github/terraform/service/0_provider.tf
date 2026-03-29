@@ -21,7 +21,7 @@ provider "aws" {
 data "terraform_remote_state" "core" {
   backend = "s3"
   config = {
-    bucket = "aws-fcj-terraform-641458060045"
+    bucket = "aws-fcj-terraform-673061300992"
     key    = "backend/core.tfstate"
     region = "ap-southeast-1"
   }
