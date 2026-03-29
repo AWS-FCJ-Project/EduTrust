@@ -162,15 +162,23 @@ jobs:
       - name: Discover ECR Repository URI
         id: ecr_uri
         run: |
-          REPO_URI=$(aws ecr describe-repositories --repository-names ${{ secrets.ECR_REPOSITORY_NAME }} --query 'repositories[0].repositoryUri' --output text)
+          set -euo pipefail
+          REPO_NAME="${{ secrets.ECR_REPOSITORY_NAME }}"
+          # Fallback check
+          if [ -z "$REPO_NAME" ]; then
+             REPO_NAME="edutrust-backend"
+          fi
+          echo "Using Repository: $REPO_NAME"
+          REPO_URI=$(aws ecr describe-repositories --repository-names "$REPO_NAME" --query 'repositories[0].repositoryUri' --output text)
           echo "repository_uri=$REPO_URI" >> "$GITHUB_OUTPUT"
+          echo "repository_name=$REPO_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Check for Existing Image (Skip if Match)
         id: check_ecr
         run: |
           set +e
           # Check for existing tag equal to the hash
-          if aws ecr describe-images --repository-names ${{ secrets.ECR_REPOSITORY_NAME }} --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} >/dev/null 2>&1; then
+          if aws ecr describe-images --repository-names ${{ steps.ecr_uri.outputs.repository_name }} --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} >/dev/null 2>&1; then
             echo "Match found for hash ${{ steps.compute_hash.outputs.image_hash }}. Skipping build."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -211,5 +219,5 @@ jobs:
         run: |
           # If image exists by hash but its on main, we just need to ensure 'latest' points to this hash
           # This is almost instant on ECR (just tagging)
-          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.ECR_REPOSITORY_NAME }} --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} --query 'images[0].imageManifest' --output text)
-          aws ecr put-image --repository-name ${{ secrets.ECR_REPOSITORY_NAME }} --image-tag latest --image-manifest "$MANIFEST"
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ steps.ecr_uri.outputs.repository_name }} --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} --query 'images[0].imageManifest' --output text)
+          aws ecr put-image --repository-name ${{ steps.ecr_uri.outputs.repository_name }} --image-tag latest --image-manifest "$MANIFEST"
