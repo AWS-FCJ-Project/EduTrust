@@ -1,10 +1,17 @@
 name: Deploy (EC2)
 
 on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+    paths:
+      - ".github/terraform/**"
+      - ".github/workflows/deploy-ec2.yml"
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [main]
+    branches: ["main", "feat/**"]
   workflow_dispatch:
     inputs:
       build_ami:
@@ -12,6 +19,7 @@ on:
         required: false
         type: boolean
         default: false
+
 permissions:
   contents: read
   packages: write
@@ -21,17 +29,19 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TF_DIR: .github/terraform
   CONTAINER_NAME: aws-fcj-backend
+  AWS_REGION: ap-southeast-1
 
 jobs:
   packer:
     name: Build Base AMI (Packer)
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Packer
         uses: hashicorp/setup-packer@v3
@@ -41,7 +51,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-southeast-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Run Packer Init
         working-directory: .github/packer
@@ -111,20 +121,17 @@ jobs:
         if: always() && env.VPC_ID != ''
         run: |
           echo "Cleaning up temporary VPC resources..."
-          # Cleanup in reverse order of creation
-          # Wait a few seconds for Packer-provisioned SG to be fully cleared by AWS
           sleep 10
           aws ec2 delete-subnet --subnet-id "$SUBNET_ID" || true
           aws ec2 detach-internet-gateway --internet-gateway-id "$IGW_ID" --vpc-id "$VPC_ID" || true
           aws ec2 delete-internet-gateway --internet-gateway-id "$IGW_ID" || true
           aws ec2 delete-vpc --vpc-id "$VPC_ID" || true
 
-
   terraform:
-    name: Provision/Update EC2 (Terraform apply)
+    name: Provision Infrastructure (Terraform)
     runs-on: ubuntu-latest
     needs: packer
-    if: always() && (needs.packer.result == 'success' || needs.packer.result == 'skipped') && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    if: always() && (needs.packer.result == 'success' || needs.packer.result == 'skipped')
     outputs:
       asg_name: ${{ steps.tf_output.outputs.asg_name }}
       aws_region: ${{ steps.tf_output.outputs.aws_region }}
@@ -137,16 +144,20 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: ap-southeast-1
       TERRAFORM_VARS: ${{ secrets.TERRAFORM_VARIABLES }}
+      TF_DIR_BASE: .github/terraform/core
+      TF_DIR_APP: .github/terraform/service
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Cache Terraform plugins
         uses: actions/cache@v4
         with:
           path: ~/.terraform.d/plugin-cache
-          key: ${{ runner.os }}-terraform-${{ hashFiles('.github/terraform/*.tf') }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('.github/terraform/**/*.tf') }}
           restore-keys: |
             ${{ runner.os }}-terraform-
 
@@ -156,15 +167,14 @@ jobs:
           terraform_version: "1.14.6"
           terraform_wrapper: false
 
-      - name: Write terraform.tfvars from secret
-        working-directory: ${{ env.TF_DIR }}
-        env:
-          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
-        run: printf "%s\n" "$TERRAFORM_VARS" > terraform.tfvars
+      - name: Write terraform.tfvars
+        run: |
+          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_APP }}/terraform.tfvars
 
       - name: Read ECR tag immutability (ecr_tag_immutable)
         id: ecr_vars
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ${{ env.TF_DIR_BASE }}
         run: |
           set -euo pipefail
           IMMUTABLE=""
@@ -179,15 +189,7 @@ jobs:
               }' terraform.tfvars || true)"
           fi
           IMMUTABLE="${IMMUTABLE:-true}"
-          case "$IMMUTABLE" in
-            true|false) ;;
-            *) echo "Invalid ecr_tag_immutable value: $IMMUTABLE" >&2; exit 1 ;;
-          esac
           echo "ecr_tag_immutable=$IMMUTABLE" >> "$GITHUB_OUTPUT"
-
-      - name: Terraform Init
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform init
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -196,10 +198,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-      - name: Import existing ECR repository (if already created)
-        working-directory: ${{ env.TF_DIR }}
+      - name: Import existing ECR repository
+        working-directory: ${{ env.TF_DIR_BASE }}
         run: |
           set -euo pipefail
+          terraform init
           if [ -f terraform.tfvars ]; then
             REPO_NAME="$(awk -F= '
               $1 ~ /^[[:space:]]*ecr_repository_name[[:space:]]*$/ {
@@ -211,25 +214,34 @@ jobs:
               }' terraform.tfvars || true)"
           fi
           REPO_NAME="${REPO_NAME:-edutrust-backend}"
-          echo "ECR repo name: $REPO_NAME"
           if aws ecr describe-repositories --repository-names "$REPO_NAME" >/dev/null 2>&1; then
             if terraform state show aws_ecr_repository.backend >/dev/null 2>&1; then
               echo "ECR repo already in Terraform state, skipping import."
             else
               echo "ECR repo exists in AWS but not in state; importing..."
-              terraform import aws_ecr_repository.backend "$REPO_NAME"
+              terraform import aws_ecr_repository.backend "$REPO_NAME" || true
             fi
-          else
-            echo "ECR repo not found in AWS; Terraform will create it."
           fi
 
-      - name: Terraform Apply
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform apply -auto-approve -input=false
+      - name: Terraform Apply (Core)
+        working-directory: ${{ env.TF_DIR_BASE }}
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          terraform init
+          terraform apply -auto-approve -input=false
+
+      - name: Terraform Apply (Service)
+        working-directory: ${{ env.TF_DIR_APP }}
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          terraform init
+          terraform apply -auto-approve -input=false
 
       - name: Get Terraform Outputs
         id: tf_output
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ${{ env.TF_DIR_APP }}
         run: |
           echo "asg_name=$(terraform output -raw backend_asg_name)" >> "$GITHUB_OUTPUT"
           echo "aws_region=$(terraform output -raw aws_region)" >> "$GITHUB_OUTPUT"
@@ -237,41 +249,58 @@ jobs:
           echo "backend_port=$(terraform output -raw backend_port)" >> "$GITHUB_OUTPUT"
           echo "secrets_kms_key_arn=$(terraform output -raw secrets_kms_key_arn)" >> "$GITHUB_OUTPUT"
 
-  build:
-    name: Build & Push backend image (ECR)
+  build-backend:
+    name: Build & Push Backend App
     runs-on: ubuntu-latest
     needs: terraform
-    if: always() && needs.terraform.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    if: always() && needs.terraform.result == 'success'
     outputs:
       image: ${{ steps.image_vars.outputs.image }}
       image_tag: ${{ steps.image_vars.outputs.image_tag }}
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ needs.terraform.outputs.aws_region }}
-      AWS_DEFAULT_REGION: ${{ needs.terraform.outputs.aws_region }}
+      AWS_REGION: ${{ needs.terraform.outputs.aws_region || env.AWS_REGION }}
       ECR_REPOSITORY_URL: ${{ needs.terraform.outputs.ecr_repository_url }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Compute Docker Context Hash
+        id: compute_hash
+        run: |
+          HASH=$(find AWS-FCJ-Project -type f \( -name "Dockerfile" -o -path "*/backend/src/*" -o -path "*/backend/requirements.txt" -o -path "*/backend/uv.lock" \) | sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
+          echo "image_hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - name: Set image variables
         id: image_vars
         run: |
           echo "image=${ECR_REPOSITORY_URL}" >> "$GITHUB_OUTPUT"
-          echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${{ steps.compute_hash.outputs.image_hash }}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ needs.terraform.outputs.aws_region }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login_ecr
         uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Check for Existing Image (Skip if Match)
+        id: check_ecr
+        run: |
+          REPO_NAME=$(echo "${ECR_REPOSITORY_URL}" | cut -d'/' -f2)
+          if aws ecr describe-images --repository-names "$REPO_NAME" --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Compute Docker tags
         id: docker_tags
@@ -297,33 +326,73 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
+        if: steps.check_ecr.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: Dockerfile
+          context: AWS-FCJ-Project
+          file: AWS-FCJ-Project/Dockerfile
           push: true
           tags: ${{ steps.docker_tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
-    name: Deploy to ASG (Rolling Update)
+  deploy-frontend:
+    name: Build & Deploy Frontend (S3)
     runs-on: ubuntu-latest
-    needs: [terraform, build]
-    if: always() && needs.terraform.result == 'success' && needs.build.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    needs: terraform
+    if: always() && needs.terraform.result == 'success'
+    env:
+      AWS_REGION: ap-southeast-1
+      S3_BUCKET: ${{ secrets.FRONTEND_S3_BUCKET }}
+      CLOUDFRONT_DIST_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "AWS-FCJ-Project/frontend/package-lock.json"
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and Sync
+        working-directory: AWS-FCJ-Project/frontend
+        run: |
+          npm install
+          npm run build
+          aws s3 sync out s3://${{ env.S3_BUCKET }} --delete
+          aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} --paths "/*"
+
+  deploy-backend:
+    name: Deploy Backend to ASG (EC2)
+    runs-on: ubuntu-latest
+    needs: [terraform, build-backend]
+    if: always() && needs.terraform.result == 'success' && needs.build-backend.result == 'success'
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ needs.terraform.outputs.aws_region }}
+      AWS_REGION: ${{ needs.terraform.outputs.aws_region || 'ap-southeast-1' }}
       ASG_NAME: ${{ needs.terraform.outputs.asg_name }}
-      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+      IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag }}
       BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
       SECRETS_KMS_KEY_ARN: ${{ needs.terraform.outputs.secrets_kms_key_arn }}
-      TF_DIR: .github/terraform
+      TF_DIR_APP: .github/terraform/service
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -347,21 +416,13 @@ jobs:
           terraform_version: "1.14.6"
           terraform_wrapper: false
 
-      - name: Cache Terraform plugins
-        uses: actions/cache@v4
-        with:
-          path: ~/.terraform.d/plugin-cache
-          key: ${{ runner.os }}-terraform-${{ hashFiles('.github/terraform/*.tf') }}
-          restore-keys: |
-            ${{ runner.os }}-terraform-
+      - name: Write terraform.tfvars
+        run: |
+          printf "%s\n" "${{ secrets.TERRAFORM_VARIABLES }}" > ${{ env.TF_DIR_APP }}/terraform.tfvars
 
       - name: Update Launch Template with new tag
-        working-directory: ${{ env.TF_DIR }}
-        env:
-          TF_VARS: ${{ secrets.TERRAFORM_VARIABLES }}
-          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        working-directory: ${{ env.TF_DIR_APP }}
         run: |
-          printf "%s\n" "$TF_VARS" > terraform.tfvars
           terraform init
           terraform apply -auto-approve -input=false -var="backend_image_tag=$IMAGE_TAG"
 
@@ -381,7 +442,6 @@ jobs:
           fi
 
           echo "Starting new instance refresh for ASG: $ASG_NAME"
-          # TIMEOUT removed as requested
           REFRESH_ID=$(aws autoscaling start-instance-refresh \
             --auto-scaling-group-name "$ASG_NAME" \
             --preferences '{"MinHealthyPercentage": 50, "InstanceWarmup": 60}' \
