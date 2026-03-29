@@ -3,14 +3,16 @@ import { Sidebar } from '@/components/ui/sidebar';
 import { Bell } from 'lucide-react';
 import Image from 'next/image';
 import study from '../../../public/study.png';
-import { LogOut } from 'lucide-react';
+import { LogOut, ChevronDown } from 'lucide-react';
 import Cookies from 'js-cookie';
+import { ProfilePopover } from '@/components/dashboard/ProfilePopover';
 
 import { useEffect, useState } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     useEffect(() => {
         const fetchUserInfo = async () => {
@@ -77,19 +79,46 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </h2>
                     <div className="flex items-center gap-6">
                         <button className="relative p-1"><Bell size={20} /></button>
-                        <div className="flex items-center gap-3 border-l pl-6">
-                            <p className="text-sm font-bold">{user.name || 'Người dùng'}</p>
-                            <div className="w-10 h-10 rounded-full relative overflow-hidden">
-                                <Image src={study} alt="Avatar" fill className="object-cover" />
-                            </div>
-                            <button
-                                onClick={handleLogout}
-                                className="ml-4 flex items-center gap-2 px-5 py-2.5 bg-[#5B0019] text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-all shadow-md active:scale-95"
+                        
+                        {/* User Profile Section */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                className="flex items-center gap-3 border border-gray-200 bg-white ml-4 px-4 py-2 rounded-2xl shadow-sm hover:border-[#5B0019]/30 transition-all active:scale-95 group"
                             >
-                                <LogOut size={18} />
-                                Đăng xuất
+                                <div className="text-right hidden sm:block">
+                                    <p className="text-sm font-bold text-gray-700">{user.name || 'Người dùng'}</p>
+                                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{user.role}</p>
+                                </div>
+                                <div className="w-10 h-10 rounded-full relative overflow-hidden border-2 border-white shadow-sm group-hover:border-[#5B0019]/20 transition-all">
+                                    <Image src={study} alt="Avatar" fill className="object-cover" />
+                                </div>
+                                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-300 ${isProfileOpen ? 'rotate-180' : ''}`} />
                             </button>
+
+                            {/* Popover */}
+                            {isProfileOpen && (
+                                <>
+                                    {/* Backdrop for closing */}
+                                    <div 
+                                        className="fixed inset-0 z-40" 
+                                        onClick={() => setIsProfileOpen(false)}
+                                    />
+                                    <ProfilePopover 
+                                        user={user} 
+                                        onClose={() => setIsProfileOpen(false)} 
+                                    />
+                                </>
+                            )}
                         </div>
+
+                        <button
+                            onClick={handleLogout}
+                            className="hidden md:flex items-center gap-2 px-5 py-2.5 bg-[#5B0019] text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-all shadow-md active:scale-95"
+                        >
+                            <LogOut size={18} />
+                            Đăng xuất
+                        </button>
                     </div>
                 </header>
 
