@@ -1,6 +1,14 @@
 name: Build AMI (Packer)
 
 on:
+  push:
+    paths:
+      - ".github/packer/**"
+      - ".github/workflows/build-ami.yml"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: ["main", "feat/**"]
   workflow_dispatch:
     inputs:
       packer_hash:

@@ -11,3 +11,4 @@ output "backend_url" {
 
 output "ecr_repository_url" { value = data.terraform_remote_state.core.outputs.ecr_repository_url }
 output "secrets_kms_key_arn" { value = data.terraform_remote_state.core.outputs.secrets_kms_key_arn }
+output "domain_name" { value = var.domain_name }

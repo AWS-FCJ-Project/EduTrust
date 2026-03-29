@@ -2,9 +2,9 @@ name: Terraform Deploy
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["Build AMI (Packer)"]
     types: [completed]
-    branches: [main]
+    branches: ["main", "feat/**"]
   workflow_dispatch:
 
 permissions:
