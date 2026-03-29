@@ -4,13 +4,14 @@ on:
   push:
     branches:
       - main
+      - "feat/**"
     paths:
       - ".github/terraform/**"
       - ".github/workflows/deploy-ec2.yml"
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: ["main"]
+    branches: ["main", "feat/**"]
   workflow_dispatch:
     inputs:
       build_ami:
@@ -39,6 +40,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Packer
         uses: hashicorp/setup-packer@v3
@@ -147,6 +150,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Cache Terraform plugins
         uses: actions/cache@v4
@@ -261,6 +266,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Compute Docker Context Hash
         id: compute_hash
@@ -341,6 +348,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -382,6 +391,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
