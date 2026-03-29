@@ -214,6 +214,40 @@ const ExamPage = () => {
         });
     }, [isStarted, isGracePeriod, isSubmitted]);
 
+    // --- 5. Anti-Cheat: Selection & Copying ---
+    useEffect(() => {
+        if (!isStarted || isSubmitted) return;
+
+        const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+        const handleCopy = (e: ClipboardEvent) => e.preventDefault();
+        const handleCut = (e: ClipboardEvent) => e.preventDefault();
+        const handlePaste = (e: ClipboardEvent) => e.preventDefault();
+        
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Disable Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+U, F12
+            if (
+                (e.ctrlKey && (e.key === 'a' || e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'u')) ||
+                e.key === 'F12'
+            ) {
+                e.preventDefault();
+            }
+        };
+
+        document.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('copy', handleCopy);
+        document.addEventListener('cut', handleCut);
+        document.addEventListener('paste', handlePaste);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('copy', handleCopy);
+            document.removeEventListener('cut', handleCut);
+            document.removeEventListener('paste', handlePaste);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isStarted, isSubmitted]);
+
     const formatTime = (seconds: number): string => {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
@@ -387,7 +421,7 @@ const ExamPage = () => {
                 </div>
 
                 {/* Main Content (Questions) */}
-                <main ref={mainContentRef} className="flex-1 overflow-y-auto bg-gray-100/50 scroll-smooth">
+                <main ref={mainContentRef} className={`flex-1 overflow-y-auto bg-gray-100/50 scroll-smooth ${isStarted ? 'select-none' : ''}`}>
                     <div className="max-w-3xl mx-auto p-8 space-y-6 pb-32">
                         {currentQuestionIndexes.map((qIdx) => {
                             const q = exam.questions[qIdx];
