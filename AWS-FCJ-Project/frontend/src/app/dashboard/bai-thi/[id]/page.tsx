@@ -218,18 +218,58 @@ const ExamPage = () => {
     useEffect(() => {
         if (!isStarted || isSubmitted) return;
 
+        const logTabViolation = async () => {
+             try {
+                const token = Cookies.get('auth_token');
+                await fetch(`${process.env.NEXT_PUBLIC_API_URL}/camera/log`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: "TAB_SWITCHED",
+                        violation_codes: ["TAB_SWITCHED"],
+                        exam_id: examId,
+                        student_id: user?.id,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            } catch (e) { console.error("Log Tab Violation Error:", e); }
+        };
+
+        const handleTabSwitch = () => {
+            if (isSubmitted) return;
+            logTabViolation();
+            setShowCheatModal(true);
+            submitExam("failed");
+        };
+
         const handleContextMenu = (e: MouseEvent) => e.preventDefault();
         const handleCopy = (e: ClipboardEvent) => e.preventDefault();
         const handleCut = (e: ClipboardEvent) => e.preventDefault();
         const handlePaste = (e: ClipboardEvent) => e.preventDefault();
         
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Disable Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+U, F12
+            // Disable Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+U, Ctrl+P, F12, PrintScreen, Win+Shift+S
+            const isCtrl = e.ctrlKey || e.metaKey;
+            const isShift = e.shiftKey;
+            
             if (
-                (e.ctrlKey && (e.key === 'a' || e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'u')) ||
-                e.key === 'F12'
+                (isCtrl && (e.key === 'a' || e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'u' || e.key === 'p')) ||
+                e.key === 'F12' ||
+                e.key === 'PrintScreen' ||
+                (isCtrl && isShift && e.key === 'S') // Win+Shift+S (Meta+Shift+S)
             ) {
                 e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                handleTabSwitch();
             }
         };
 
@@ -237,16 +277,20 @@ const ExamPage = () => {
         document.addEventListener('copy', handleCopy);
         document.addEventListener('cut', handleCut);
         document.addEventListener('paste', handlePaste);
-        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keydown', handleKeyDown, true);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('blur', handleTabSwitch);
 
         return () => {
             document.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('copy', handleCopy);
             document.removeEventListener('cut', handleCut);
             document.removeEventListener('paste', handlePaste);
-            document.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('keydown', handleKeyDown, true);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('blur', handleTabSwitch);
         };
-    }, [isStarted, isSubmitted]);
+    }, [isStarted, isSubmitted, examId, user?.id]);
 
     const formatTime = (seconds: number): string => {
         const h = Math.floor(seconds / 3600);
