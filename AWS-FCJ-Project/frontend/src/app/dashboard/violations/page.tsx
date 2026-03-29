@@ -65,8 +65,9 @@ const ViolationsPage = () => {
             // Processing each exam to find unique images and filtering by threshold (>= 4)
             const filteredExams = Object.values(g.exams).map((exam: any) => {
                 const uniqueImages = Array.from(new Set(exam.incidents.flatMap((inc: any) => inc.evidence_images || [])));
-                return { ...exam, uniqueImages };
-            }).filter((exam: any) => exam.uniqueImages.length >= 4);
+                const hasTabSwitch = exam.incidents.some((inc: any) => inc.type === 'TAB_SWITCHED');
+                return { ...exam, uniqueImages, hasTabSwitch };
+            }).filter((exam: any) => exam.uniqueImages.length >= 4 || exam.hasTabSwitch);
 
             return {
                 ...g,
@@ -198,21 +199,27 @@ const ViolationsPage = () => {
                                                             <p className="text-[10px] font-bold text-[#5B0019] opacity-70">Môn: {exam.subject}</p>
                                                         </div>
                                                     </div>
-                                                    
-                                                    <div className="flex items-center gap-8 pr-4">
+                                                                                                        <div className="flex items-center gap-8 pr-4">
                                                         <div className="text-right">
                                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1 flex items-center justify-end gap-1.5"><Calendar size={10} /> Thời gian ca thi</p>
                                                             <p className="text-sm font-black text-gray-700">
                                                                 {formatDate(exam.exam_start)}
                                                             </p>
                                                         </div>
-                                                        <div className="px-5 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-600/20">
-                                                            Bị đình chỉ
+                                                        <div className="flex flex-col gap-2 items-end">
+                                                            <div className="px-5 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-600/20">
+                                                                Bị đình chỉ
+                                                            </div>
+                                                            {exam.hasTabSwitch && (
+                                                                <div className="px-3 py-1 bg-orange-100 text-orange-600 border border-orange-200 rounded-lg font-black text-[9px] uppercase tracking-[0.2em] shadow-sm">
+                                                                    ⚠️ THOÁT TAB
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Evidence Grid - Collect all and unique images from incidents */}
+                                                 {/* Evidence Grid - Collect all and unique images from incidents */}
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2 pl-2">
                                                         <ImageIcon size={14} className="text-gray-300" />
@@ -222,6 +229,18 @@ const ViolationsPage = () => {
                                                     </div>
                                                     
                                                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                                        {exam.hasTabSwitch && (
+                                                            <div className="col-span-full p-6 bg-orange-50 rounded-3xl border border-orange-100 flex items-center gap-6 shadow-sm border-l-8 border-l-orange-500 animate-in slide-in-from-left-4 duration-500">
+                                                                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-orange-500 shadow-sm shrink-0">
+                                                                    <ShieldAlert size={28} />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-black text-gray-900 mb-1">HÀNH VI: THOÁT CỬA SỔ LÀM BÀI</p>
+                                                                    <p className="text-xs font-semibold text-gray-500 leading-relaxed uppercase tracking-widest">Hệ thống AI đã tự động thu bài và đánh trượt do học sinh rời khỏi màn hình thi ngay cả khi chưa đủ số lần vi phạm camera.</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        
                                                         {exam.uniqueImages.length > 0 ? (
                                                             exam.uniqueImages.map((img: any, i: number) => (
                                                                 <div 
@@ -240,10 +259,12 @@ const ViolationsPage = () => {
                                                                 </div>
                                                             ))
                                                         ) : (
-                                                            <div className="col-span-full py-10 bg-gray-50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
-                                                                <AlertCircle size={32} className="opacity-20 mb-2" />
-                                                                <p className="text-xs font-bold uppercase tracking-widest">Không có dữ liệu ảnh bằng chứng</p>
-                                                            </div>
+                                                            !exam.hasTabSwitch && (
+                                                                <div className="col-span-full py-10 bg-gray-50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
+                                                                    <AlertCircle size={32} className="opacity-20 mb-2" />
+                                                                    <p className="text-xs font-bold uppercase tracking-widest">Không có dữ liệu ảnh bằng chứng</p>
+                                                                </div>
+                                                            )
                                                         )}
                                                     </div>
                                                 </div>

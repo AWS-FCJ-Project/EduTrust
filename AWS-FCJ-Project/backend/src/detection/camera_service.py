@@ -101,6 +101,21 @@ class CameraService:
         if not image_b64:
             if not violations:
                 return {"status": "cleared"}
+
+            # Special case: TAB_SWITCHED or other non-image violations
+            if "TAB_SWITCHED" in violations:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                for v_code in violations:
+                    print(f" [ACTION] Logging {v_code} for {student_id} (No Image)...")
+                    await self.logger.log_violation(
+                        exam_id,
+                        student_id,
+                        v_code,
+                        timestamp,
+                        {"person_count": 0, "reason": "TAB_SWITCHED"},
+                    )
+                return {"status": "logged success", "violations_count": len(violations)}
+
             print(" [ERROR] Image missing from violation payload")
             return {"error": "Missing image for violation"}
 
