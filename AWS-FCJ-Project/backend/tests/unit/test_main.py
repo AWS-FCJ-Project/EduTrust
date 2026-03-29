@@ -15,6 +15,7 @@ def app():
     # Import inside the fixture to ensure any module-level mocks are applied
     # and to avoid side effects during test collection
     from src.main import app
+
     return app
 
 
