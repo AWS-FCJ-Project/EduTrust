@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".pre-commit-config.yaml"
+      - ".github/workflows/**"
+      - "Dockerfile"
+      - ".github/terraform/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".pre-commit-config.yaml"
+      - ".github/workflows/**"
+      - "Dockerfile"
+      - ".github/terraform/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    name: Pre-commit Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pre-commit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pre-commit-
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+
+  test:
+    name: Backend Test & Coverage
+    runs-on: ubuntu-latest
+    # Run in parallel with pre-commit for faster CI
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "backend/uv.lock"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Load backend .env 
+        env:
+          BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
+        run: |
+          if [ -n "${BACKEND_ENV_FILE}" ]; then
+            printf '%s' "${BACKEND_ENV_FILE}" > .env
+          fi
+
+      - name: Run tests with coverage
+        run: PYTHONPATH=.. uv run pytest tests -v --maxfail=1 --disable-warnings --cov=src --cov-report=term-missing --cov-report=xml:coverage.xml
+
+  terraform-check:
+    name: Terraform Validate & Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.6"
+          terraform_wrapper: false
+
+      - name: Terraform Format Check
+        working-directory: .github/terraform
+        run: terraform fmt -check -recursive
+        # Fails if any .tf file is not properly formatted
+
+      - name: Terraform Validate
+        working-directory: .github/terraform
+        run: |
+          terraform init -backend=false
+          terraform validate
+        # -backend=false: skip S3 init (no AWS creds needed on PR)
+
+      - name: Run Checkov (security scan)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .github/terraform
+          framework: terraform
+          soft_fail: false
+          skip_check: CKV_AWS_8,CKV_AWS_126,CKV_AWS_24,CKV_AWS_130,CKV_AWS_260,CKV_AWS_2,CKV2_AWS_20,CKV_AWS_103,CKV_AWS_378,CKV_AWS_382,CKV_AWS_91,CKV_AWS_150,CKV2_AWS_11,CKV2_AWS_12,CKV2_AWS_28
