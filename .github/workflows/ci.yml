@@ -128,7 +128,7 @@ jobs:
     name: Build & Push Artifact
     runs-on: ubuntu-latest
     needs: [validate, security-scan, terraform-check]
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     outputs:
       image_tag: ${{ steps.image_vars.outputs.image_tag }}
     env:
@@ -139,10 +139,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set image variables
-        id: image_vars
+      - name: Compute Docker Context Hash
+        id: compute_hash
         run: |
-          echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          # 1. Isolation: Compute hash considering only key source files
+          HASH=$(find AWS-FCJ-Project -type f \( -name "Dockerfile" -o -path "*/backend/src/*" -o -path "*/backend/requirements.txt" -o -path "*/backend/uv.lock" \) | sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
+          echo "Computed Hash: $HASH"
+          echo "image_hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -158,18 +162,54 @@ jobs:
       - name: Discover ECR Repository URI
         id: ecr_uri
         run: |
-          # Use describe-repositories to find the URI dynamically
           REPO_URI=$(aws ecr describe-repositories --repository-names ${{ secrets.ECR_REPOSITORY_NAME }} --query 'repositories[0].repositoryUri' --output text)
           echo "repository_uri=$REPO_URI" >> "$GITHUB_OUTPUT"
 
+      - name: Check for Existing Image (Skip if Match)
+        id: check_ecr
+        run: |
+          set +e
+          # Check for existing tag equal to the hash
+          if aws ecr describe-images --repository-names ${{ secrets.ECR_REPOSITORY_NAME }} --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} >/dev/null 2>&1; then
+            echo "Match found for hash ${{ steps.compute_hash.outputs.image_hash }}. Skipping build."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No match for hash ${{ steps.compute_hash.outputs.image_hash }}. Building new image..."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set Image Tags
+        id: image_vars
+        run: |
+          IMAGE_HASH=${{ steps.compute_hash.outputs.image_hash }}
+          REPO_URI=${{ steps.ecr_uri.outputs.repository_uri }}
+          
+          # Base tag is the unique hash
+          TAGS="${REPO_URI}:${IMAGE_HASH}"
+          
+          # Promote to latest only on main
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TAGS="${TAGS},${REPO_URI}:latest"
+          fi
+          
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_HASH" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
+        if: steps.check_ecr.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: AWS-FCJ-Project
           file: AWS-FCJ-Project/Dockerfile
           push: true
-          tags: |
-            ${{ steps.ecr_uri.outputs.repository_uri }}:${{ github.sha }}
-            ${{ steps.ecr_uri.outputs.repository_uri }}:latest
+          tags: ${{ steps.image_vars.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Image Tag Update (Promote without re-build)
+        if: steps.check_ecr.outputs.exists == 'true' && github.ref == 'refs/heads/main'
+        run: |
+          # If image exists by hash but its on main, we just need to ensure 'latest' points to this hash
+          # This is almost instant on ECR (just tagging)
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.ECR_REPOSITORY_NAME }} --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} --query 'images[0].imageManifest' --output text)
+          aws ecr put-image --repository-name ${{ secrets.ECR_REPOSITORY_NAME }} --image-tag latest --image-manifest "$MANIFEST"
