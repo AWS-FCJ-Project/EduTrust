@@ -153,6 +153,9 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
+      - name: Create Plugin Cache Dir
+        run: mkdir -p ~/.terraform.d/plugin-cache
+
       - name: Cache Terraform plugins
         uses: actions/cache@v4
         with:
@@ -169,8 +172,8 @@ jobs:
 
       - name: Write terraform.tfvars
         run: |
-          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_BASE }}/terraform.tfvars
-          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_APP }}/terraform.tfvars
+          printf "%s\n" "$TERRAFORM_VARS" | tr -d '\r' > ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          printf "%s\n" "$TERRAFORM_VARS" | tr -d '\r' > ${{ env.TF_DIR_APP }}/terraform.tfvars
 
       - name: Read ECR tag immutability (ecr_tag_immutable)
         id: ecr_vars
