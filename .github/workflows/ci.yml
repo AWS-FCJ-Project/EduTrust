@@ -164,12 +164,22 @@ jobs:
         run: |
           set -euo pipefail
           REPO_NAME="${{ secrets.ECR_REPOSITORY_NAME }}"
-          # Fallback check
           if [ -z "$REPO_NAME" ]; then
              REPO_NAME="edutrust-backend"
           fi
           echo "Using Repository: $REPO_NAME"
-          REPO_URI=$(aws ecr describe-repositories --repository-names "$REPO_NAME" --query 'repositories[0].repositoryUri' --output text)
+          
+          # Check if repository exists, if not create it
+          REPO_URI=$(aws ecr describe-repositories --repository-names "$REPO_NAME" --query 'repositories[0].repositoryUri' --output text 2>/dev/null || true)
+          
+          if [ -z "$REPO_URI" ]; then
+            echo "Repository $REPO_NAME not found. Creating it..."
+            REPO_URI=$(aws ecr create-repository --repository-name "$REPO_NAME" --query 'repository.repositoryUri' --output text)
+            echo "Successfully created ECR repository: $REPO_NAME"
+          else
+            echo "Found existing ECR repository: $REPO_NAME"
+          fi
+          
           echo "repository_uri=$REPO_URI" >> "$GITHUB_OUTPUT"
           echo "repository_name=$REPO_NAME" >> "$GITHUB_OUTPUT"
 

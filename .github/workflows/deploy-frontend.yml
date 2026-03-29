@@ -23,24 +23,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: "AWS-FCJ-Project/frontend/package-lock.json"
-
-      - name: Create .env file from secret
-        working-directory: AWS-FCJ-Project/frontend
-        run: echo "${{ secrets.FRONTEND_ENV_FILE }}" > .env
-
-      - name: Install dependencies
-        working-directory: AWS-FCJ-Project/frontend
-        run: npm install
-
-      - name: Build and Export
-        working-directory: AWS-FCJ-Project/frontend
-        run: npm run build
+      - name: Compute Frontend Context Hash
+        id: compute_hash
+        run: |
+          set -euo pipefail
+          # 1. Compute hash considering only key frontend source files
+          HASH=$(find AWS-FCJ-Project/frontend -type f \( -name "package.json" -o -name "package-lock.json" -o -name "next.config.mjs" -o -path "*/src/*" -o -path "*/public/*" \) | sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
+          echo "Computed Hash: $HASH"
+          echo "frontend_hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -49,11 +39,53 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Check for Existing Build in S3 (Skip if Match)
+        id: check_s3
+        run: |
+          set +e
+          # Try to get the hash marker from S3
+          REMOTE_HASH=$(aws s3 cp s3://${{ env.S3_BUCKET }}/build-hash.txt - 2>/dev/null)
+          if [ "$REMOTE_HASH" = "${{ steps.compute_hash.outputs.frontend_hash }}" ]; then
+            echo "Match found for hash ${{ steps.compute_hash.outputs.frontend_hash }} in S3. Skipping build."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No match or missing hash marker. Building new frontend..."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js
+        if: steps.check_s3.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "AWS-FCJ-Project/frontend/package-lock.json"
+
+      - name: Create .env file from secret
+        if: steps.check_s3.outputs.skip != 'true'
+        working-directory: AWS-FCJ-Project/frontend
+        run: echo "${{ secrets.FRONTEND_ENV_FILE }}" > .env
+
+      - name: Install dependencies
+        if: steps.check_s3.outputs.skip != 'true'
+        working-directory: AWS-FCJ-Project/frontend
+        run: npm install
+
+      - name: Build and Export
+        if: steps.check_s3.outputs.skip != 'true'
+        working-directory: AWS-FCJ-Project/frontend
+        run: npm run build
+
       - name: Deploy to S3
+        if: steps.check_s3.outputs.skip != 'true'
         run: |
           aws s3 sync AWS-FCJ-Project/frontend/out s3://${{ env.S3_BUCKET }} --delete
+          # Save the hash marker to S3
+          echo "${{ steps.compute_hash.outputs.frontend_hash }}" > build-hash.txt
+          aws s3 cp build-hash.txt s3://${{ env.S3_BUCKET }}/build-hash.txt
 
       - name: Invalidate CloudFront Cache
+        if: steps.check_s3.outputs.skip != 'true'
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} \
