@@ -17,31 +17,19 @@
 ## Project Structure
 
 ```
-aws-fcj-project/
-├── Dockerfile                      # Container build definition
-├── backend/                        # FastAPI application
-│   ├── config/                     # Agent + LLM YAML configs
-│   │   ├── agents.yaml
-│   │   └── llms.yaml
-│   ├── src/
-│   │   ├── crew/                   # Orchestrator + tool wiring
-│   │   ├── memory/                 # MongoDB conversation storage
-│   │   ├── routers/                # API routes
-│   │   ├── schemas/                # Endpoint schemas
-│   │   ├── search_services/        # Web search services
-│   │   ├── app_config.py           # Env + settings
-│   │   ├── logger.py               # Logging helpers
-│   │   ├── state.py                # Shared app state
-│   │   └── main.py                 # FastAPI entry point
-│   ├── test_tools.py               # Local tool smoke tests
-│   └── pyproject.toml              # Backend deps
-└── frontend/                       # React app (Vite)
-    ├── src/
-    │   ├── App.tsx
-    │   ├── main.tsx
-    │   └── styles.css
-    ├── index.html
-    └── package.json
+EduTrust/                           # Root Directory
+├── README.md                      # This file
+└── AWS-FCJ-Project/               # Main Project Folder
+    ├── Dockerfile                 # Container build definition
+    ├── backend/                   # FastAPI application
+    │   ├── config/                # Agent + LLM YAML configs
+    │   ├── src/                   # Source code
+    │   └── pyproject.toml         # Backend deps
+    ├── frontend/                  # React app (Next.js)
+    │   ├── src/                   # Source code
+    │   ├── public/                # Static assets
+    │   └── package.json           # Frontend deps
+    └── scripts/                   # Utility scripts (setup, etc.)
 ```
 
 ## Prerequisites
