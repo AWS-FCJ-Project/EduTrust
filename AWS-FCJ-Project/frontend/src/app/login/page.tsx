@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -83,13 +84,15 @@ export default function LoginPage() {
         <main className="min-h-screen bg-[#5B0019] flex items-center justify-center p-4 font-sans text-white">
             <div className="w-full max-w-100 bg-[#420012] p-8 rounded-3xl shadow-2xl border border-white/5">
 
-                <div className="flex justify-center mb-6">
-                    <div className="flex items-center gap-2">
-                        <div className="bg-[#0D9488] p-1.5 rounded-lg">
-                            <span className="text-white font-bold text-xl">ET</span>
-                        </div>
-                        <span className="text-white font-bold text-2xl tracking-tight">EDUTRUST</span>
-                    </div>
+                <div className="flex flex-col items-center justify-center mb-10 gap-3">
+                    <Image 
+                        src="/icon.png" 
+                        alt="Logo" 
+                        width={120} 
+                        height={120} 
+                        className="object-contain drop-shadow-2xl"
+                    />
+                    <span className="text-white font-black text-3xl tracking-[0.2em] uppercase">EDUTRUST</span>
                 </div>
 
                 <div className="text-center mb-8">
