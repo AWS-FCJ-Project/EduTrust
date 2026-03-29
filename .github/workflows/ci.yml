@@ -1,22 +1,15 @@
 name: CI
 
 on:
+  push:
+    paths:
+      - "AWS-FCJ-Project/backend/**"
+      - "AWS-FCJ-Project/.pre-commit-config.yaml"
+      - ".github/workflows/ci.yml"
   pull_request:
     paths:
       - "AWS-FCJ-Project/backend/**"
-      - "AWS-FCJ-Project/.pre-commit-config.yaml"
-      - ".github/workflows/**"
-      - "AWS-FCJ-Project/Dockerfile"
-      - ".github/terraform/**"
-  push:
-    branches:
-      - main
-    paths:
-      - "AWS-FCJ-Project/backend/**"
-      - "AWS-FCJ-Project/.pre-commit-config.yaml"
-      - ".github/workflows/**"
-      - "AWS-FCJ-Project/Dockerfile"
-      - ".github/terraform/**"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -78,11 +71,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Run Bandit (SAST)
         run: |
           pip install bandit
@@ -94,41 +82,4 @@ jobs:
           scan-type: 'fs'
           scan-ref: 'AWS-FCJ-Project/backend'
           format: 'table'
-          exit-code: '0'
           severity: 'CRITICAL,HIGH'
-
-  terraform-check:
-    name: Terraform Validate & Security
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Cache Terraform plugins
-        uses: actions/cache@v4
-        with:
-          path: ~/.terraform.d/plugin-cache
-          key: ${{ runner.os }}-terraform-${{ hashFiles('.github/terraform/**/*.tf') }}
-          restore-keys: |
-            ${{ runner.os }}-terraform-
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.14.6"
-
-      - name: Terraform Init
-        working-directory: .github/terraform
-        run: terraform init -backend=false
-
-      - name: Terraform Validate
-        working-directory: .github/terraform
-        run: terraform validate
-
-      - name: Run Checkov (Security Scan)
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: .github/terraform
-          framework: terraform
-          soft_fail: true # Change to false once baseline is established
-

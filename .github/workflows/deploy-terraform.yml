@@ -1,12 +1,6 @@
 name: Terraform Deploy
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/terraform/**"
-      - ".github/workflows/deploy-terraform.yml"
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -17,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: terraform-deploy-main
+  group: terraform-deploy-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -27,12 +21,13 @@ jobs:
   terraform:
     name: Terraform Plan & Apply
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     env:
       TERRAFORM_VARS: ${{ secrets.TERRAFORM_VARIABLES }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+      TF_DIR_BASE: .github/terraform/core
+      TF_DIR_APP: .github/terraform/service
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -51,21 +46,19 @@ jobs:
           terraform_version: "1.14.6"
           terraform_wrapper: false
 
-      - name: Write terraform.tfvars from secret
-        working-directory: ${{ env.TF_DIR }}
-        run: printf "%s\n" "$TERRAFORM_VARS" > terraform.tfvars
+      - name: Write terraform.tfvars
+        run: |
+          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_APP }}/terraform.tfvars
 
-      - name: Terraform Init
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform init
+      - name: Terraform Init & Apply (Base)
+        working-directory: ${{ env.TF_DIR_BASE }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
 
-      - name: Terraform Plan
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform plan -out=tfplan
-
-      - name: Terraform Apply
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform apply -auto-approve tfplan
-
-      
+      - name: Terraform Init & Apply (App)
+        working-directory: ${{ env.TF_DIR_APP }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
