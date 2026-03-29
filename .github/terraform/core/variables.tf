@@ -16,7 +16,7 @@ variable "ssm_endpoint_service_name" { type = string }
 variable "sts_endpoint_service_name" { type = string }
 variable "logs_endpoint_service_name" { type = string }
 
-variable "ecr_repository_name" { type = string }
+variable "ECR_REPOSITORY_NAME" { type = string }
 variable "ecr_tag_immutable" { type = bool }
 
 variable "domain_name" { type = string }

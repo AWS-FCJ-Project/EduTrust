@@ -205,7 +205,7 @@ jobs:
           terraform init
           if [ -f terraform.tfvars ]; then
             REPO_NAME="$(awk -F= '
-              $1 ~ /^[[:space:]]*ecr_repository_name[[:space:]]*$/ {
+              $1 ~ /^[[:space:]]*ECR_REPOSITORY_NAME[[:space:]]*$/ {
                 v=$2
                 gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
                 gsub(/\"/, "", v)

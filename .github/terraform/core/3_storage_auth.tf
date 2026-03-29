@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "backend" {
-  name                 = var.ecr_repository_name
+  name                 = var.ECR_REPOSITORY_NAME
   image_tag_mutability = var.ecr_tag_immutable ? "IMMUTABLE" : "MUTABLE"
 
   encryption_configuration {
