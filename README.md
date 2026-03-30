@@ -19,17 +19,16 @@
 ```
 EduTrust/                           # Root Directory
 ├── README.md                      # This file
-└── AWS-FCJ-Project/               # Main Project Folder
-    ├── Dockerfile                 # Container build definition
-    ├── backend/                   # FastAPI application
-    │   ├── config/                # Agent + LLM YAML configs
-    │   ├── src/                   # Source code
-    │   └── pyproject.toml         # Backend deps
-    ├── frontend/                  # React app (Next.js)
-    │   ├── src/                   # Source code
-    │   ├── public/                # Static assets
-    │   └── package.json           # Frontend deps
-    └── scripts/                   # Utility scripts (setup, etc.)
+├── Dockerfile                 # Container build definition
+├── backend/                   # FastAPI application
+│   ├── config/                # Agent + LLM YAML configs
+│   ├── src/                   # Source code
+│   └── pyproject.toml         # Backend deps
+├── frontend/                  # React app (Next.js)
+│   ├── src/                   # Source code
+│   ├── public/                # Static assets
+│   └── package.json           # Frontend deps
+└── scripts/                   # Utility scripts (setup, etc.)
 ```
 
 ## Prerequisites
