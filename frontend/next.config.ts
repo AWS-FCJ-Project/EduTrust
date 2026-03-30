@@ -20,6 +20,13 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
 
+  // Logging configuration for CloudWatch
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
+
   // Environment variable validation
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
