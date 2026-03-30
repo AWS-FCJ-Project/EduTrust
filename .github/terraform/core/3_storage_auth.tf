@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "backend" {
-  name                 = var.ECR_REPOSITORY_NAME
+  name = var.ECR_REPOSITORY_NAME
   # checkov:skip=CKV_AWS_51:Repository is set to MUTABLE to allow re-pushing same tags (e.g. latest) while using lifecycle policies for cleanup.
   image_tag_mutability = "MUTABLE"
 
