@@ -66,6 +66,11 @@ resource "aws_wafv2_web_acl" "cloudfront" {
   provider = aws.us_east_1
   name     = "${var.ec2_instance_name}-cloudfront-waf"
   scope    = "CLOUDFRONT"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
   default_action {
     allow {}
   }
