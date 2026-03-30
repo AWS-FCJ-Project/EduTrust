@@ -161,8 +161,12 @@ jobs:
 
       - name: Write terraform.tfvars
         run: |
-          printf "%s\n" "$TERRAFORM_VARS" | tr -d '\r' > ${{ env.TF_DIR_BASE }}/terraform.tfvars
-          printf "%s\n" "$TERRAFORM_VARS" | tr -d '\r' > ${{ env.TF_DIR_APP }}/terraform.tfvars
+          cat <<'TFVARS' > ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          ${{ secrets.TERRAFORM_VARIABLES }}
+          TFVARS
+          cat <<'TFVARS' > ${{ env.TF_DIR_APP }}/terraform.tfvars
+          ${{ secrets.TERRAFORM_VARIABLES }}
+          TFVARS
 
       - name: Read ECR tag immutability (ecr_tag_immutable)
         id: ecr_vars
@@ -419,7 +423,9 @@ jobs:
 
       - name: Write terraform.tfvars
         run: |
-          printf "%s\n" "${{ secrets.TERRAFORM_VARIABLES }}" > ${{ env.TF_DIR_APP }}/terraform.tfvars
+          cat <<'TFVARS' > ${{ env.TF_DIR_APP }}/terraform.tfvars
+          ${{ secrets.TERRAFORM_VARIABLES }}
+          TFVARS
 
       - name: Update Launch Template with new tag
         working-directory: ${{ env.TF_DIR_APP }}
