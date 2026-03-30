@@ -1,6 +1,7 @@
 resource "aws_ecr_repository" "backend" {
-  name                 = var.ecr_repository_name
-  image_tag_mutability = var.ecr_tag_immutable ? "IMMUTABLE" : "MUTABLE"
+  name = var.ECR_REPOSITORY_NAME
+  # checkov:skip=CKV_AWS_51:Repository is set to MUTABLE to allow re-pushing same tags (e.g. latest) while using lifecycle policies for cleanup.
+  image_tag_mutability = "MUTABLE"
 
   encryption_configuration {
     encryption_type = "KMS"
@@ -10,6 +11,40 @@ resource "aws_ecr_repository" "backend" {
   image_scanning_configuration {
     scan_on_push = true
   }
+}
+
+resource "aws_ecr_lifecycle_policy" "backend" {
+  repository = aws_ecr_repository.backend.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Remove untagged images immediately"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep last 3 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 3
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_cognito_user_pool" "main" {

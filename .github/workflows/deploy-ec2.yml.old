@@ -1,13 +1,6 @@
 name: Deploy (EC2)
 
 on:
-  push:
-    branches:
-      - main
-      - "feat/**"
-    paths:
-      - ".github/terraform/**"
-      - ".github/workflows/deploy-ec2.yml"
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -138,14 +131,44 @@ jobs:
       ecr_repository_url: ${{ steps.tf_output.outputs.ecr_repository_url }}
       backend_port: ${{ steps.tf_output.outputs.backend_port }}
       secrets_kms_key_arn: ${{ steps.tf_output.outputs.secrets_kms_key_arn }}
-      ecr_tag_immutable: ${{ steps.ecr_vars.outputs.ecr_tag_immutable }}
+      ecr_tag_immutable: ${{ secrets.TF_VAR_ecr_tag_immutable || 'false' }}
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: ap-southeast-1
-      TERRAFORM_VARS: ${{ secrets.TERRAFORM_VARIABLES }}
       TF_DIR_BASE: .github/terraform/core
       TF_DIR_APP: .github/terraform/service
+      # Terraform variables from secrets
+      TF_VAR_aws_region: ${{ secrets.TF_VAR_aws_region }}
+      TF_VAR_ec2_instance_type: ${{ secrets.TF_VAR_ec2_instance_type }}
+      TF_VAR_ec2_instance_name: ${{ secrets.TF_VAR_ec2_instance_name }}
+      TF_VAR_ec2_key_name: ${{ secrets.TF_VAR_ec2_key_name }}
+      TF_VAR_ECR_REPOSITORY_NAME: ${{ secrets.TF_VAR_ECR_REPOSITORY_NAME }}
+      TF_VAR_ecr_tag_immutable: ${{ secrets.TF_VAR_ecr_tag_immutable }}
+      TF_VAR_asg_min_size: ${{ secrets.TF_VAR_asg_min_size }}
+      TF_VAR_asg_max_size: ${{ secrets.TF_VAR_asg_max_size }}
+      TF_VAR_asg_desired_capacity: ${{ secrets.TF_VAR_asg_desired_capacity }}
+      TF_VAR_backend_image_tag: ${{ secrets.TF_VAR_backend_image_tag }}
+      TF_VAR_docdb_egress_cidr_blocks: ${{ secrets.TF_VAR_docdb_egress_cidr_blocks }}
+      TF_VAR_redis_egress_cidr_blocks: ${{ secrets.TF_VAR_redis_egress_cidr_blocks }}
+      TF_VAR_dns_egress_cidr_blocks: ${{ secrets.TF_VAR_dns_egress_cidr_blocks }}
+      TF_VAR_vpc_cidr_block: ${{ secrets.TF_VAR_vpc_cidr_block }}
+      TF_VAR_private_subnet_1a_cidr: ${{ secrets.TF_VAR_private_subnet_1a_cidr }}
+      TF_VAR_private_subnet_1c_cidr: ${{ secrets.TF_VAR_private_subnet_1c_cidr }}
+      TF_VAR_public_subnet_1a_cidr: ${{ secrets.TF_VAR_public_subnet_1a_cidr }}
+      TF_VAR_public_subnet_1c_cidr: ${{ secrets.TF_VAR_public_subnet_1c_cidr }}
+      TF_VAR_vpc_name: ${{ secrets.TF_VAR_vpc_name }}
+      TF_VAR_igw_name: ${{ secrets.TF_VAR_igw_name }}
+      TF_VAR_backend_port: ${{ secrets.TF_VAR_backend_port }}
+      TF_VAR_domain_name: ${{ secrets.TF_VAR_domain_name }}
+      TF_VAR_cognito_domain_prefix: ${{ secrets.TF_VAR_cognito_domain_prefix }}
+      TF_VAR_frontend_bucket_name: ${{ secrets.TF_VAR_frontend_bucket_name }}
+      TF_VAR_s3_endpoint_service_name: ${{ secrets.TF_VAR_s3_endpoint_service_name }}
+      TF_VAR_ecr_dkr_endpoint_service_name: ${{ secrets.TF_VAR_ecr_dkr_endpoint_service_name }}
+      TF_VAR_ecr_api_endpoint_service_name: ${{ secrets.TF_VAR_ecr_api_endpoint_service_name }}
+      TF_VAR_ssm_endpoint_service_name: ${{ secrets.TF_VAR_ssm_endpoint_service_name }}
+      TF_VAR_sts_endpoint_service_name: ${{ secrets.TF_VAR_sts_endpoint_service_name }}
+      TF_VAR_logs_endpoint_service_name: ${{ secrets.TF_VAR_logs_endpoint_service_name }}
 
     steps:
       - name: Checkout code
@@ -153,14 +176,13 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      - name: Cache Terraform plugins
-        uses: actions/cache@v4
+      - name: Check for Core Infra changes
+        id: filter
+        uses: dorny/paths-filter@v3
         with:
-          path: ~/.terraform.d/plugin-cache
-          key: ${{ runner.os }}-terraform-${{ hashFiles('.github/terraform/**/*.tf') }}
-          restore-keys: |
-            ${{ runner.os }}-terraform-
-
+          filters: |
+            core:
+              - '.github/terraform/core/**'
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -169,8 +191,15 @@ jobs:
 
       - name: Write terraform.tfvars
         run: |
-          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_BASE }}/terraform.tfvars
-          printf "%s\n" "$TERRAFORM_VARS" > ${{ env.TF_DIR_APP }}/terraform.tfvars
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_APP }}/terraform.tfvars
+
+      - name: Debug terraform.tfvars content
+        run: |
+          echo "=== Core terraform.tfvars (first 20 lines) ==="
+          head -20 ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          echo "=== Service terraform.tfvars (first 20 lines) ==="
+          head -20 ${{ env.TF_DIR_APP }}/terraform.tfvars
 
       - name: Read ECR tag immutability (ecr_tag_immutable)
         id: ecr_vars
@@ -198,14 +227,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-      - name: Import existing ECR repository
+      - name: Ensure ECR Repository exists (Create or Import)
         working-directory: ${{ env.TF_DIR_BASE }}
         run: |
           set -euo pipefail
           terraform init
           if [ -f terraform.tfvars ]; then
             REPO_NAME="$(awk -F= '
-              $1 ~ /^[[:space:]]*ecr_repository_name[[:space:]]*$/ {
+              $1 ~ /^[[:space:]]*ECR_REPOSITORY_NAME[[:space:]]*$/ {
                 v=$2
                 gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
                 gsub(/\"/, "", v)
@@ -214,16 +243,24 @@ jobs:
               }' terraform.tfvars || true)"
           fi
           REPO_NAME="${REPO_NAME:-edutrust-backend}"
+          echo "Found REPO_NAME: $REPO_NAME"
+
           if aws ecr describe-repositories --repository-names "$REPO_NAME" >/dev/null 2>&1; then
             if terraform state show aws_ecr_repository.backend >/dev/null 2>&1; then
-              echo "ECR repo already in Terraform state, skipping import."
+              echo "ECR repo $REPO_NAME already in Terraform state, skipping import."
             else
-              echo "ECR repo exists in AWS but not in state; importing..."
+              echo "ECR repo $REPO_NAME exists in AWS but not in state; importing..."
               terraform import aws_ecr_repository.backend "$REPO_NAME" || true
             fi
+          else
+            echo "ECR repo $REPO_NAME does not exist. Creating with MUTABLE tags..."
+            aws ecr create-repository --repository-name "$REPO_NAME" \
+              --image-tag-mutability MUTABLE \
+              --encryption-configuration encryptionType=AES256 || true
           fi
 
       - name: Terraform Apply (Core)
+        if: steps.filter.outputs.core == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: ${{ env.TF_DIR_BASE }}
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
@@ -260,7 +297,7 @@ jobs:
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ needs.terraform.outputs.aws_region || env.AWS_REGION }}
+      AWS_REGION: ${{ needs.terraform.outputs.aws_region || 'ap-southeast-1' }}
       ECR_REPOSITORY_URL: ${{ needs.terraform.outputs.ecr_repository_url }}
 
     steps:
@@ -272,7 +309,7 @@ jobs:
       - name: Compute Docker Context Hash
         id: compute_hash
         run: |
-          HASH=$(find AWS-FCJ-Project -type f \( -name "Dockerfile" -o -path "*/backend/src/*" -o -path "*/backend/requirements.txt" -o -path "*/backend/uv.lock" \) | sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
+          HASH=$(find backend -type f \( -name "Dockerfile" -o -path "*/backend/src/*" -o -path "*/backend/requirements.txt" -o -path "*/backend/uv.lock" \) | sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
           echo "image_hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - name: Set image variables
@@ -296,9 +333,12 @@ jobs:
         id: check_ecr
         run: |
           REPO_NAME=$(echo "${ECR_REPOSITORY_URL}" | cut -d'/' -f2)
-          if aws ecr describe-images --repository-names "$REPO_NAME" --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} >/dev/null 2>&1; then
+          echo "Checking for image tag ${{ steps.compute_hash.outputs.image_hash }} in repository $REPO_NAME..."
+          if aws ecr describe-images --repository-names "$REPO_NAME" --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} --query "imageDetails[0].imageDigest" --output text >/dev/null 2>&1; then
+            echo "Image exists. Skipping push."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
+            echo "Image does not exist. Proceeding with build."
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -329,12 +369,10 @@ jobs:
         if: steps.check_ecr.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
-          context: AWS-FCJ-Project
-          file: AWS-FCJ-Project/Dockerfile
+          context: .
+          file: Dockerfile
           push: true
           tags: ${{ steps.docker_tags.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy-frontend:
     name: Build & Deploy Frontend (S3)
@@ -356,7 +394,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "AWS-FCJ-Project/frontend/package-lock.json"
+          cache-dependency-path: "frontend/package-lock.json"
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -366,11 +404,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Build and Sync
-        working-directory: AWS-FCJ-Project/frontend
+        working-directory: frontend
         run: |
           npm install
           npm run build
-          aws s3 sync out s3://${{ env.S3_BUCKET }} --delete
+          aws s3 sync out/ s3://${{ env.S3_BUCKET }} --delete
           aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} --paths "/*"
 
   deploy-backend:
@@ -418,7 +456,7 @@ jobs:
 
       - name: Write terraform.tfvars
         run: |
-          printf "%s\n" "${{ secrets.TERRAFORM_VARIABLES }}" > ${{ env.TF_DIR_APP }}/terraform.tfvars
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_APP }}/terraform.tfvars
 
       - name: Update Launch Template with new tag
         working-directory: ${{ env.TF_DIR_APP }}

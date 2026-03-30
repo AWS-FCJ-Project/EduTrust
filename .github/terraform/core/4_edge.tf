@@ -66,6 +66,11 @@ resource "aws_wafv2_web_acl" "cloudfront" {
   provider = aws.us_east_1
   name     = "${var.ec2_instance_name}-cloudfront-waf"
   scope    = "CLOUDFRONT"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
   default_action {
     allow {}
   }
@@ -102,6 +107,8 @@ resource "aws_cloudfront_distribution" "main" {
   default_root_object = "index.html"
   web_acl_id          = aws_wafv2_web_acl.cloudfront.arn
   aliases             = [var.domain_name]
+
+  depends_on = [aws_wafv2_web_acl.cloudfront]
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -166,6 +173,12 @@ resource "aws_cloudfront_distribution" "main" {
     acm_certificate_arn      = aws_acm_certificate_validation.cloudfront.certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  custom_error_response {
+    error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
   }
 
   tags = { Name = "${var.ec2_instance_name}-cloudfront" }
