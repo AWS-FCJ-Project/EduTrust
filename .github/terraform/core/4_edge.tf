@@ -102,6 +102,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 }
 
 resource "aws_cloudfront_distribution" "main" {
+  # checkov:skip=CKV_AWS_305:No default_root_object needed - CloudFront routes all traffic to ALB backend, not serving static files
   enabled         = true
   is_ipv6_enabled = true
   web_acl_id      = aws_wafv2_web_acl.cloudfront.arn
