@@ -192,7 +192,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-      - name: Import existing ECR repository
+      - name: Ensure ECR Repository exists (Create or Import)
         working-directory: ${{ env.TF_DIR_BASE }}
         run: |
           set -euo pipefail
@@ -208,13 +208,20 @@ jobs:
               }' terraform.tfvars || true)"
           fi
           REPO_NAME="${REPO_NAME:-edutrust-backend}"
+          echo "Found REPO_NAME: $REPO_NAME"
+
           if aws ecr describe-repositories --repository-names "$REPO_NAME" >/dev/null 2>&1; then
             if terraform state show aws_ecr_repository.backend >/dev/null 2>&1; then
-              echo "ECR repo already in Terraform state, skipping import."
+              echo "ECR repo $REPO_NAME already in Terraform state, skipping import."
             else
-              echo "ECR repo exists in AWS but not in state; importing..."
+              echo "ECR repo $REPO_NAME exists in AWS but not in state; importing..."
               terraform import aws_ecr_repository.backend "$REPO_NAME" || true
             fi
+          else
+            echo "ECR repo $REPO_NAME does not exist. Creating with MUTABLE tags..."
+            aws ecr create-repository --repository-name "$REPO_NAME" \
+              --image-tag-mutability MUTABLE \
+              --encryption-configuration encryptionType=AES256 || true
           fi
 
       - name: Terraform Apply (Core)
@@ -290,9 +297,12 @@ jobs:
         id: check_ecr
         run: |
           REPO_NAME=$(echo "${ECR_REPOSITORY_URL}" | cut -d'/' -f2)
-          if aws ecr describe-images --repository-names "$REPO_NAME" --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} >/dev/null 2>&1; then
+          echo "Checking for image tag ${{ steps.compute_hash.outputs.image_hash }} in repository $REPO_NAME..."
+          if aws ecr describe-images --repository-names "$REPO_NAME" --image-ids imageTag=${{ steps.compute_hash.outputs.image_hash }} --query "imageDetails[0].imageDigest" --output text >/dev/null 2>&1; then
+            echo "Image exists. Skipping push."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
+            echo "Image does not exist. Proceeding with build."
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
