@@ -1,22 +1,15 @@
-data "aws_key_pair" "existing" {
-  key_name           = var.ec2_key_name
-  include_public_key = false
-}
-
-locals {
-  key_name = try(data.aws_key_pair.existing.key_name, aws_key_pair.backend[0].key_name)
-}
-
 resource "tls_private_key" "backend" {
-  count     = data.aws_key_pair.existing.id == null ? 1 : 0
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "backend" {
-  count      = data.aws_key_pair.existing.id == null ? 1 : 0
   key_name   = var.ec2_key_name
-  public_key = tls_private_key.backend[0].public_key_openssh
+  public_key = tls_private_key.backend.public_key_openssh
+
+  lifecycle {
+    ignore_changes = [public_key]
+  }
 }
 
 resource "aws_security_group" "backend" {
@@ -96,7 +89,7 @@ resource "aws_launch_template" "backend" {
   name_prefix   = "${var.ec2_instance_name}-lt-"
   image_id      = data.aws_ami.base_ami.id
   instance_type = var.ec2_instance_type
-  key_name      = local.key_name
+  key_name      = aws_key_pair.backend.key_name
 
   iam_instance_profile {
     name = data.terraform_remote_state.core.outputs.backend_instance_profile_name
