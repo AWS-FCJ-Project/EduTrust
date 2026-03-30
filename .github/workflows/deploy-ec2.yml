@@ -168,6 +168,13 @@ jobs:
           ${{ secrets.TERRAFORM_VARIABLES }}
           TFVARS
 
+      - name: Debug terraform.tfvars content
+        run: |
+          echo "=== Core terraform.tfvars (first 20 lines) ==="
+          head -20 ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          echo "=== Service terraform.tfvars (first 20 lines) ==="
+          head -20 ${{ env.TF_DIR_APP }}/terraform.tfvars
+
       - name: Read ECR tag immutability (ecr_tag_immutable)
         id: ecr_vars
         working-directory: ${{ env.TF_DIR_BASE }}
