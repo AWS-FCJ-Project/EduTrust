@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "export",
+  // Use standalone for server-side rendering with dynamic routes
+  // output: "export", // Remove this for dynamic routes
 };
 
 export default nextConfig;
