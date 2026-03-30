@@ -1,13 +1,6 @@
 name: Deploy (EC2)
 
 on:
-  push:
-    branches:
-      - main
-      - "feat/**"
-    paths:
-      - ".github/terraform/**"
-      - ".github/workflows/deploy-ec2.yml"
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -153,8 +146,13 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-
-
+      - name: Check for Core Infra changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            core:
+              - '.github/terraform/core/**'
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -225,6 +223,7 @@ jobs:
           fi
 
       - name: Terraform Apply (Core)
+        if: steps.filter.outputs.core == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: ${{ env.TF_DIR_BASE }}
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
@@ -372,11 +371,8 @@ jobs:
         run: |
           npm install
           npm run build
-          # For server-side rendering, deploy the .next folder and public assets
-          # This requires a Node.js server to run the app
-          # If you need static export, use 'output: export' in next.config.ts
-          # and ensure all dynamic routes have generateStaticParams()
-          echo "Build complete. Deploy .next folder to your server."
+          aws s3 sync out/ s3://${{ env.S3_BUCKET }} --delete
+          aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} --paths "/*"
 
   deploy-backend:
     name: Deploy Backend to ASG (EC2)
