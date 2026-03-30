@@ -272,7 +272,7 @@ jobs:
       - name: Compute Docker Context Hash
         id: compute_hash
         run: |
-          HASH=$(find AWS-FCJ-Project -type f \( -name "Dockerfile" -o -path "*/backend/src/*" -o -path "*/backend/requirements.txt" -o -path "*/backend/uv.lock" \) | sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
+          HASH=$(find backend -type f \( -name "Dockerfile" -o -path "*/backend/src/*" -o -path "*/backend/requirements.txt" -o -path "*/backend/uv.lock" \) | sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
           echo "image_hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - name: Set image variables
@@ -332,8 +332,8 @@ jobs:
         if: steps.check_ecr.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
-          context: AWS-FCJ-Project
-          file: AWS-FCJ-Project/Dockerfile
+          context: .
+          file: Dockerfile
           push: true
           tags: ${{ steps.docker_tags.outputs.tags }}
 
@@ -357,7 +357,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "AWS-FCJ-Project/frontend/package-lock.json"
+          cache-dependency-path: "frontend/package-lock.json"
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -367,7 +367,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Build and Sync
-        working-directory: AWS-FCJ-Project/frontend
+        working-directory: frontend
         run: |
           npm install
           npm run build

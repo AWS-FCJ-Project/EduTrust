@@ -3,19 +3,19 @@ name: CI
 on:
   pull_request:
     paths:
-      - "AWS-FCJ-Project/backend/**"
-      - "AWS-FCJ-Project/.pre-commit-config.yaml"
+      - "backend/**"
+      - ".pre-commit-config.yaml"
       - ".github/workflows/**"
-      - "AWS-FCJ-Project/Dockerfile"
+      - "Dockerfile"
       - ".github/terraform/**"
   push:
     branches:
       - main
     paths:
-      - "AWS-FCJ-Project/backend/**"
-      - "AWS-FCJ-Project/.pre-commit-config.yaml"
+      - "backend/**"
+      - ".pre-commit-config.yaml"
       - ".github/workflows/**"
-      - "AWS-FCJ-Project/Dockerfile"
+      - "Dockerfile"
       - ".github/terraform/**"
   workflow_dispatch:
 
@@ -39,14 +39,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
-          key: ${{ runner.os }}-pre-commit-${{ hashFiles('AWS-FCJ-Project/.pre-commit-config.yaml') }}
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pre-commit-
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
         with:
-          extra_args: --config AWS-FCJ-Project/.pre-commit-config.yaml
+          extra_args: --config .pre-commit-config.yaml
 
   test:
     name: Backend Test & Coverage
@@ -54,7 +54,7 @@ jobs:
     # Run in parallel with pre-commit for faster CI
     defaults:
       run:
-        working-directory: AWS-FCJ-Project/backend
+        working-directory: backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          cache-dependency-glob: "AWS-FCJ-Project/backend/uv.lock"
+          cache-dependency-glob: "backend/uv.lock"
 
       - name: Setup Python
         uses: actions/setup-python@v5
