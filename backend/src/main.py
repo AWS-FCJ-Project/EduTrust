@@ -47,8 +47,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AWS-FCJ-Project",
-    description="API for AWS-FCJ-Backend",
+    title="EduTrust",
+    description="API for EduTrust Backend",
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -114,7 +114,7 @@ app.mount("/storage", StaticFiles(directory=storage_dir), name="storage")
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to the AWS-FCJ-Backend API"}
+    return {"message": "Welcome to the EduTrust Backend API"}
 
 
 @app.get("/health")

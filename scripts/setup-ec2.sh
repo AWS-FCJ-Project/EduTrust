@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# EC2 Setup Script for AWS FCJ Project
+# EC2 Setup Script for EduTrust Project
 # Run this script on your EC2 instance to prepare for deployment
 
 set -e
 
-echo "Setting up EC2 instance for AWS FCJ Project..."
+echo "Setting up EC2 instance for EduTrust Project..."
 
 # Update system
 echo "Updating system packages..."
