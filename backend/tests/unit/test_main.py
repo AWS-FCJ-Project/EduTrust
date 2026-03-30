@@ -27,7 +27,7 @@ def client(app):
 def test_root(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "Welcome to the AWS-FCJ-Backend API"}
+    assert response.json() == {"message": "Welcome to the EduTrust Backend API"}
 
 
 def test_health_check(client):
