@@ -332,6 +332,8 @@ const ExamPage = () => {
         .filter(idx => idx < totalQuestions);
     const totalPages = Math.ceil(totalQuestions / QUESTIONS_PER_PAGE);
 
+    if (isSubmitted) {
+        return (
             <div className="fixed inset-0 z-[11000] bg-white flex flex-col items-center justify-center p-6 text-center animate-in zoom-in duration-500">
                 <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 shadow-xl animate-bounce">
                     <Trophy size={48} />
@@ -342,6 +344,8 @@ const ExamPage = () => {
                     THOÁT SAU {exitCountdown}S
                 </div>
             </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-[10000] flex flex-col w-full h-screen bg-gray-50 font-sans overflow-hidden text-sm">
