@@ -161,12 +161,8 @@ jobs:
 
       - name: Write terraform.tfvars
         run: |
-          cat <<'TFVARS' > ${{ env.TF_DIR_BASE }}/terraform.tfvars
-          ${{ secrets.TERRAFORM_VARIABLES }}
-          TFVARS
-          cat <<'TFVARS' > ${{ env.TF_DIR_APP }}/terraform.tfvars
-          ${{ secrets.TERRAFORM_VARIABLES }}
-          TFVARS
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_BASE }}/terraform.tfvars
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_APP }}/terraform.tfvars
 
       - name: Debug terraform.tfvars content
         run: |
@@ -430,9 +426,7 @@ jobs:
 
       - name: Write terraform.tfvars
         run: |
-          cat <<'TFVARS' > ${{ env.TF_DIR_APP }}/terraform.tfvars
-          ${{ secrets.TERRAFORM_VARIABLES }}
-          TFVARS
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_APP }}/terraform.tfvars
 
       - name: Update Launch Template with new tag
         working-directory: ${{ env.TF_DIR_APP }}
