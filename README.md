@@ -95,9 +95,29 @@ The frontend is located in the `frontend/` directory.
 
 ## Deployment (Terraform + GitHub Actions)
 
-This repo supports automated provisioning + deployment of the backend to AWS EC2 using Terraform, and optional proxy deployment to Cloudflare Workers.
+This repo supports automated provisioning and deployment to AWS using Terraform and GitHub Actions.
 
--   Terraform infrastructure lives in `.github/terraform/` (EC2 + Security Group + remote state on S3).
--   CI/CD is implemented via GitHub Actions in `.github/workflows/`.
+### CI/CD Pipeline Architecture
 
-See `/docs/deployment.md` for the end-to-end architecture, required GitHub secrets, and the deploy flow.
+The deployment pipeline consists of three independent workflows:
+
+1. **Infrastructure Pipeline** (`.github/workflows/infra.yml`) - Manual provisioning of AWS resources
+2. **Application Pipeline** (`.github/workflows/app.yml`) - Automatic deployment of application code
+3. **AMI Build Pipeline** (`.github/workflows/ami.yml`) - Manual base AMI creation
+
+### Quick Start
+
+**Deploy Application Changes:**
+- Push code to main or feature branch
+- CI pipeline validates code automatically
+- Application Pipeline deploys on CI success
+
+**Update Infrastructure:**
+- Modify Terraform files in `.github/terraform/`
+- Manually trigger Infrastructure Pipeline from Actions tab
+
+**Rebuild Base AMI:**
+- Modify Packer configuration in `.github/packer/`
+- Manually trigger AMI Pipeline from Actions tab
+
+For detailed documentation, see [.github/workflows/README.md](.github/workflows/README.md).
