@@ -1,3 +1,24 @@
+data "aws_key_pair" "existing" {
+  key_name           = var.ec2_key_name
+  include_public_key = false
+}
+
+locals {
+  key_name = try(data.aws_key_pair.existing.key_name, aws_key_pair.backend[0].key_name)
+}
+
+resource "tls_private_key" "backend" {
+  count     = data.aws_key_pair.existing.id == null ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "backend" {
+  count      = data.aws_key_pair.existing.id == null ? 1 : 0
+  key_name   = var.ec2_key_name
+  public_key = tls_private_key.backend[0].public_key_openssh
+}
+
 resource "aws_security_group" "backend" {
   name        = "${var.ec2_instance_name}-sg"
   description = "Security group for backend EC2"
@@ -75,7 +96,7 @@ resource "aws_launch_template" "backend" {
   name_prefix   = "${var.ec2_instance_name}-lt-"
   image_id      = data.aws_ami.base_ami.id
   instance_type = var.ec2_instance_type
-  key_name      = var.ec2_key_name
+  key_name      = local.key_name
 
   iam_instance_profile {
     name = data.terraform_remote_state.core.outputs.backend_instance_profile_name
@@ -195,7 +216,10 @@ EOF
     tags          = { Name = "${var.ec2_instance_name}-asg-node" }
   }
 
-  lifecycle { create_before_destroy = true }
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [latest_version]
+  }
 }
 
 resource "aws_autoscaling_group" "backend" {
@@ -214,6 +238,8 @@ resource "aws_autoscaling_group" "backend" {
   health_check_type         = "EC2"
   health_check_grace_period = 300
   wait_for_capacity_timeout = "0"
+  force_delete              = true
+  wait_for_elb_capacity     = 0
 
   instance_refresh {
     strategy = "Rolling"

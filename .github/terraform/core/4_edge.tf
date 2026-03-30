@@ -108,6 +108,8 @@ resource "aws_cloudfront_distribution" "main" {
   web_acl_id          = aws_wafv2_web_acl.cloudfront.arn
   aliases             = [var.domain_name]
 
+  depends_on = [aws_wafv2_web_acl.cloudfront]
+
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "S3-Frontend"
