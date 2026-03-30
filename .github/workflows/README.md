@@ -270,3 +270,70 @@ The previous monolithic `deploy-ec2.yml` workflow has been replaced by the three
 - [Requirements](../../.kiro/specs/ci-cd-pipeline-refactor/requirements.md)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+
+
+## Frontend Deployment (AWS Amplify)
+
+The frontend is now deployed to **AWS Amplify** with Server-Side Rendering (SSR) support, replacing the previous S3 + CloudFront static hosting.
+
+### Why Amplify?
+
+| Feature | S3 + CloudFront | AWS Amplify |
+|---------|----------------|-------------|
+| Static Export | Required | Not needed |
+| Dynamic Routes | ❌ Not supported | ✅ Fully supported |
+| SSR/ISR | ❌ No | ✅ Yes |
+| Auto Deploy | Manual workflow | ✅ Auto on push |
+| Cost | $1-2/month | $4-5/month |
+
+### Deployment Method
+
+- **Platform**: AWS Amplify
+- **Trigger**: Automatic on git push to main branch
+- **Build**: Amplify auto-detects Next.js and builds using `amplify.yml`
+- **Features**: SSR, ISR, Dynamic Routes, Auto CDN, SSL
+
+### Configuration
+
+Frontend build settings are defined in `amplify.yml`:
+
+```yaml
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd frontend
+        - npm ci --legacy-peer-deps
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: frontend/.next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - frontend/node_modules/**/*
+      - frontend/.next/cache/**/*
+```
+
+### Environment Variables
+
+Set in AWS Amplify Console → Environment variables:
+
+```
+NEXT_PUBLIC_API_URL = https://your-backend-alb-url.com
+```
+
+### Monitoring
+
+- **Build logs**: Amplify Console → Build history
+- **Performance**: Amplify Console → Monitoring
+- **Errors**: CloudWatch Logs
+
+### Deployment URL
+
+After setup, Amplify provides a URL like: `https://main.xxx.amplifyapp.com`
+
+For detailed deployment guide, see `frontend/AMPLIFY_DEPLOYMENT.md`.
