@@ -131,14 +131,44 @@ jobs:
       ecr_repository_url: ${{ steps.tf_output.outputs.ecr_repository_url }}
       backend_port: ${{ steps.tf_output.outputs.backend_port }}
       secrets_kms_key_arn: ${{ steps.tf_output.outputs.secrets_kms_key_arn }}
-      ecr_tag_immutable: ${{ steps.ecr_vars.outputs.ecr_tag_immutable }}
+      ecr_tag_immutable: ${{ secrets.TF_VAR_ecr_tag_immutable || 'false' }}
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: ap-southeast-1
-      TERRAFORM_VARS: ${{ secrets.TERRAFORM_VARIABLES }}
       TF_DIR_BASE: .github/terraform/core
       TF_DIR_APP: .github/terraform/service
+      # Terraform variables from secrets
+      TF_VAR_aws_region: ${{ secrets.TF_VAR_aws_region }}
+      TF_VAR_ec2_instance_type: ${{ secrets.TF_VAR_ec2_instance_type }}
+      TF_VAR_ec2_instance_name: ${{ secrets.TF_VAR_ec2_instance_name }}
+      TF_VAR_ec2_key_name: ${{ secrets.TF_VAR_ec2_key_name }}
+      TF_VAR_ECR_REPOSITORY_NAME: ${{ secrets.TF_VAR_ECR_REPOSITORY_NAME }}
+      TF_VAR_ecr_tag_immutable: ${{ secrets.TF_VAR_ecr_tag_immutable }}
+      TF_VAR_asg_min_size: ${{ secrets.TF_VAR_asg_min_size }}
+      TF_VAR_asg_max_size: ${{ secrets.TF_VAR_asg_max_size }}
+      TF_VAR_asg_desired_capacity: ${{ secrets.TF_VAR_asg_desired_capacity }}
+      TF_VAR_backend_image_tag: ${{ secrets.TF_VAR_backend_image_tag }}
+      TF_VAR_docdb_egress_cidr_blocks: ${{ secrets.TF_VAR_docdb_egress_cidr_blocks }}
+      TF_VAR_redis_egress_cidr_blocks: ${{ secrets.TF_VAR_redis_egress_cidr_blocks }}
+      TF_VAR_dns_egress_cidr_blocks: ${{ secrets.TF_VAR_dns_egress_cidr_blocks }}
+      TF_VAR_vpc_cidr_block: ${{ secrets.TF_VAR_vpc_cidr_block }}
+      TF_VAR_private_subnet_1a_cidr: ${{ secrets.TF_VAR_private_subnet_1a_cidr }}
+      TF_VAR_private_subnet_1c_cidr: ${{ secrets.TF_VAR_private_subnet_1c_cidr }}
+      TF_VAR_public_subnet_1a_cidr: ${{ secrets.TF_VAR_public_subnet_1a_cidr }}
+      TF_VAR_public_subnet_1c_cidr: ${{ secrets.TF_VAR_public_subnet_1c_cidr }}
+      TF_VAR_vpc_name: ${{ secrets.TF_VAR_vpc_name }}
+      TF_VAR_igw_name: ${{ secrets.TF_VAR_igw_name }}
+      TF_VAR_backend_port: ${{ secrets.TF_VAR_backend_port }}
+      TF_VAR_domain_name: ${{ secrets.TF_VAR_domain_name }}
+      TF_VAR_cognito_domain_prefix: ${{ secrets.TF_VAR_cognito_domain_prefix }}
+      TF_VAR_frontend_bucket_name: ${{ secrets.TF_VAR_frontend_bucket_name }}
+      TF_VAR_s3_endpoint_service_name: ${{ secrets.TF_VAR_s3_endpoint_service_name }}
+      TF_VAR_ecr_dkr_endpoint_service_name: ${{ secrets.TF_VAR_ecr_dkr_endpoint_service_name }}
+      TF_VAR_ecr_api_endpoint_service_name: ${{ secrets.TF_VAR_ecr_api_endpoint_service_name }}
+      TF_VAR_ssm_endpoint_service_name: ${{ secrets.TF_VAR_ssm_endpoint_service_name }}
+      TF_VAR_sts_endpoint_service_name: ${{ secrets.TF_VAR_sts_endpoint_service_name }}
+      TF_VAR_logs_endpoint_service_name: ${{ secrets.TF_VAR_logs_endpoint_service_name }}
 
     steps:
       - name: Checkout code
