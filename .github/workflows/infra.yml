@@ -46,6 +46,7 @@ jobs:
       TF_VAR_backend_port: ${{ secrets.TF_VAR_backend_port }}
       TF_VAR_domain_name: ${{ secrets.TF_VAR_domain_name }}
       TF_VAR_cognito_domain_prefix: ${{ secrets.TF_VAR_cognito_domain_prefix }}
+      TF_VAR_frontend_bucket_name: ${{ secrets.TF_VAR_frontend_bucket_name }}
       TF_VAR_s3_endpoint_service_name: ${{ secrets.TF_VAR_s3_endpoint_service_name }}
       TF_VAR_ecr_dkr_endpoint_service_name: ${{ secrets.TF_VAR_ecr_dkr_endpoint_service_name }}
       TF_VAR_ecr_api_endpoint_service_name: ${{ secrets.TF_VAR_ecr_api_endpoint_service_name }}
@@ -174,6 +175,7 @@ jobs:
       TF_VAR_backend_port: ${{ secrets.TF_VAR_backend_port }}
       TF_VAR_domain_name: ${{ secrets.TF_VAR_domain_name }}
       TF_VAR_cognito_domain_prefix: ${{ secrets.TF_VAR_cognito_domain_prefix }}
+      TF_VAR_frontend_bucket_name: ${{ secrets.TF_VAR_frontend_bucket_name }}
       TF_VAR_s3_endpoint_service_name: ${{ secrets.TF_VAR_s3_endpoint_service_name }}
       TF_VAR_ecr_dkr_endpoint_service_name: ${{ secrets.TF_VAR_ecr_dkr_endpoint_service_name }}
       TF_VAR_ecr_api_endpoint_service_name: ${{ secrets.TF_VAR_ecr_api_endpoint_service_name }}
