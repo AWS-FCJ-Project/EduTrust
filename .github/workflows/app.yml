@@ -56,6 +56,7 @@ jobs:
       TF_VAR_backend_port: ${{ secrets.TF_VAR_backend_port }}
       TF_VAR_domain_name: ${{ secrets.TF_VAR_domain_name }}
       TF_VAR_cognito_domain_prefix: ${{ secrets.TF_VAR_cognito_domain_prefix }}
+      TF_VAR_frontend_bucket_name: ${{ secrets.TF_VAR_frontend_bucket_name }}
       TF_VAR_s3_endpoint_service_name: ${{ secrets.TF_VAR_s3_endpoint_service_name }}
       TF_VAR_ecr_dkr_endpoint_service_name: ${{ secrets.TF_VAR_ecr_dkr_endpoint_service_name }}
       TF_VAR_ecr_api_endpoint_service_name: ${{ secrets.TF_VAR_ecr_api_endpoint_service_name }}
@@ -209,10 +210,47 @@ jobs:
     name: Build and Deploy Frontend
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ap-southeast-1
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      CLOUDFRONT_DIST_ID: ${{ secrets.CLOUDFRONT_DIST_ID }}
 
     steps:
-      - name: Skip Frontend Deployment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Sync to S3
         run: |
-          echo "Frontend is now deployed via AWS Amplify"
-          echo "Amplify automatically deploys on git push"
-          echo "Visit AWS Amplify Console to monitor deployments"
+          aws s3 sync frontend/out/ s3://${{ env.S3_BUCKET }} --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} \
+            --paths "/*"
