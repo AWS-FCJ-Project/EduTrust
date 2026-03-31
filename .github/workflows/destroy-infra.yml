@@ -1,0 +1,226 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm deletion of all resources'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  validate-input:
+    name: Validate Destroy Confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "❌ Confirmation failed. You must type 'DESTROY' to proceed."
+            exit 1
+          fi
+          echo "✓ Confirmation validated"
+
+  destroy-service:
+    name: Destroy Service Infrastructure
+    runs-on: ubuntu-latest
+    needs: validate-input
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ap-southeast-1
+      TF_DIR_APP: .github/terraform/service
+      TF_VAR_aws_region: ${{ secrets.TF_VAR_aws_region }}
+      TF_VAR_ec2_instance_type: ${{ secrets.TF_VAR_ec2_instance_type }}
+      TF_VAR_ec2_instance_name: ${{ secrets.TF_VAR_ec2_instance_name }}
+      TF_VAR_ec2_key_name: ${{ secrets.TF_VAR_ec2_key_name }}
+      TF_VAR_ECR_REPOSITORY_NAME: ${{ secrets.TF_VAR_ECR_REPOSITORY_NAME }}
+      TF_VAR_ecr_tag_immutable: ${{ secrets.TF_VAR_ecr_tag_immutable }}
+      TF_VAR_asg_min_size: ${{ secrets.TF_VAR_asg_min_size }}
+      TF_VAR_asg_max_size: ${{ secrets.TF_VAR_asg_max_size }}
+      TF_VAR_asg_desired_capacity: ${{ secrets.TF_VAR_asg_desired_capacity }}
+      TF_VAR_backend_image_tag: ${{ secrets.TF_VAR_backend_image_tag }}
+      TF_VAR_docdb_egress_cidr_blocks: ${{ secrets.TF_VAR_docdb_egress_cidr_blocks }}
+      TF_VAR_redis_egress_cidr_blocks: ${{ secrets.TF_VAR_redis_egress_cidr_blocks }}
+      TF_VAR_dns_egress_cidr_blocks: ${{ secrets.TF_VAR_dns_egress_cidr_blocks }}
+      TF_VAR_vpc_cidr_block: ${{ secrets.TF_VAR_vpc_cidr_block }}
+      TF_VAR_private_subnet_1a_cidr: ${{ secrets.TF_VAR_private_subnet_1a_cidr }}
+      TF_VAR_private_subnet_1c_cidr: ${{ secrets.TF_VAR_private_subnet_1c_cidr }}
+      TF_VAR_public_subnet_1a_cidr: ${{ secrets.TF_VAR_public_subnet_1a_cidr }}
+      TF_VAR_public_subnet_1c_cidr: ${{ secrets.TF_VAR_public_subnet_1c_cidr }}
+      TF_VAR_vpc_name: ${{ secrets.TF_VAR_vpc_name }}
+      TF_VAR_igw_name: ${{ secrets.TF_VAR_igw_name }}
+      TF_VAR_backend_port: ${{ secrets.TF_VAR_backend_port }}
+      TF_VAR_domain_name: ${{ secrets.TF_VAR_domain_name }}
+      TF_VAR_cognito_domain_prefix: ${{ secrets.TF_VAR_cognito_domain_prefix }}
+      TF_VAR_frontend_bucket_name: ${{ secrets.TF_VAR_frontend_bucket_name }}
+      TF_VAR_s3_endpoint_service_name: ${{ secrets.TF_VAR_s3_endpoint_service_name }}
+      TF_VAR_ecr_dkr_endpoint_service_name: ${{ secrets.TF_VAR_ecr_dkr_endpoint_service_name }}
+      TF_VAR_ecr_api_endpoint_service_name: ${{ secrets.TF_VAR_ecr_api_endpoint_service_name }}
+      TF_VAR_ssm_endpoint_service_name: ${{ secrets.TF_VAR_ssm_endpoint_service_name }}
+      TF_VAR_sts_endpoint_service_name: ${{ secrets.TF_VAR_sts_endpoint_service_name }}
+      TF_VAR_logs_endpoint_service_name: ${{ secrets.TF_VAR_logs_endpoint_service_name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.6"
+          terraform_wrapper: false
+
+      - name: Write terraform.tfvars
+        run: |
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_APP }}/terraform.tfvars
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Terraform Destroy (Service)
+        working-directory: ${{ env.TF_DIR_APP }}
+        run: |
+          terraform init
+          terraform destroy -auto-approve -input=false
+
+  destroy-core:
+    name: Destroy Core Infrastructure
+    runs-on: ubuntu-latest
+    needs: destroy-service
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ap-southeast-1
+      TF_DIR_BASE: .github/terraform/core
+      TF_VAR_aws_region: ${{ secrets.TF_VAR_aws_region }}
+      TF_VAR_ec2_instance_type: ${{ secrets.TF_VAR_ec2_instance_type }}
+      TF_VAR_ec2_instance_name: ${{ secrets.TF_VAR_ec2_instance_name }}
+      TF_VAR_ec2_key_name: ${{ secrets.TF_VAR_ec2_key_name }}
+      TF_VAR_ECR_REPOSITORY_NAME: ${{ secrets.TF_VAR_ECR_REPOSITORY_NAME }}
+      TF_VAR_ecr_tag_immutable: ${{ secrets.TF_VAR_ecr_tag_immutable }}
+      TF_VAR_asg_min_size: ${{ secrets.TF_VAR_asg_min_size }}
+      TF_VAR_asg_max_size: ${{ secrets.TF_VAR_asg_max_size }}
+      TF_VAR_asg_desired_capacity: ${{ secrets.TF_VAR_asg_desired_capacity }}
+      TF_VAR_backend_image_tag: ${{ secrets.TF_VAR_backend_image_tag }}
+      TF_VAR_docdb_egress_cidr_blocks: ${{ secrets.TF_VAR_docdb_egress_cidr_blocks }}
+      TF_VAR_redis_egress_cidr_blocks: ${{ secrets.TF_VAR_redis_egress_cidr_blocks }}
+      TF_VAR_dns_egress_cidr_blocks: ${{ secrets.TF_VAR_dns_egress_cidr_blocks }}
+      TF_VAR_vpc_cidr_block: ${{ secrets.TF_VAR_vpc_cidr_block }}
+      TF_VAR_private_subnet_1a_cidr: ${{ secrets.TF_VAR_private_subnet_1a_cidr }}
+      TF_VAR_private_subnet_1c_cidr: ${{ secrets.TF_VAR_private_subnet_1c_cidr }}
+      TF_VAR_public_subnet_1a_cidr: ${{ secrets.TF_VAR_public_subnet_1a_cidr }}
+      TF_VAR_public_subnet_1c_cidr: ${{ secrets.TF_VAR_public_subnet_1c_cidr }}
+      TF_VAR_vpc_name: ${{ secrets.TF_VAR_vpc_name }}
+      TF_VAR_igw_name: ${{ secrets.TF_VAR_igw_name }}
+      TF_VAR_backend_port: ${{ secrets.TF_VAR_backend_port }}
+      TF_VAR_domain_name: ${{ secrets.TF_VAR_domain_name }}
+      TF_VAR_cognito_domain_prefix: ${{ secrets.TF_VAR_cognito_domain_prefix }}
+      TF_VAR_frontend_bucket_name: ${{ secrets.TF_VAR_frontend_bucket_name }}
+      TF_VAR_s3_endpoint_service_name: ${{ secrets.TF_VAR_s3_endpoint_service_name }}
+      TF_VAR_ecr_dkr_endpoint_service_name: ${{ secrets.TF_VAR_ecr_dkr_endpoint_service_name }}
+      TF_VAR_ecr_api_endpoint_service_name: ${{ secrets.TF_VAR_ecr_api_endpoint_service_name }}
+      TF_VAR_ssm_endpoint_service_name: ${{ secrets.TF_VAR_ssm_endpoint_service_name }}
+      TF_VAR_sts_endpoint_service_name: ${{ secrets.TF_VAR_sts_endpoint_service_name }}
+      TF_VAR_logs_endpoint_service_name: ${{ secrets.TF_VAR_logs_endpoint_service_name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.6"
+          terraform_wrapper: false
+
+      - name: Write terraform.tfvars
+        run: |
+          echo '${{ secrets.TERRAFORM_VARIABLES }}' > ${{ env.TF_DIR_BASE }}/terraform.tfvars
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Empty S3 buckets before destroy
+        run: |
+          # Get bucket name from tfvars
+          if [ -f ${{ env.TF_DIR_BASE }}/terraform.tfvars ]; then
+            BUCKET_NAME=$(awk -F= '$1 ~ /^[[:space:]]*frontend_bucket_name[[:space:]]*$/ {
+              v=$2
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+              gsub(/\"/, "", v)
+              print v
+              exit
+            }' ${{ env.TF_DIR_BASE }}/terraform.tfvars || true)
+          fi
+          
+          if [ -n "$BUCKET_NAME" ]; then
+            echo "Emptying S3 bucket: $BUCKET_NAME"
+            aws s3 rm s3://$BUCKET_NAME --recursive || true
+          fi
+
+      - name: Delete ECR images before destroy
+        run: |
+          # Get ECR repo name from tfvars
+          if [ -f ${{ env.TF_DIR_BASE }}/terraform.tfvars ]; then
+            REPO_NAME=$(awk -F= '$1 ~ /^[[:space:]]*ECR_REPOSITORY_NAME[[:space:]]*$/ {
+              v=$2
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+              gsub(/\"/, "", v)
+              print v
+              exit
+            }' ${{ env.TF_DIR_BASE }}/terraform.tfvars || true)
+          fi
+          REPO_NAME="${REPO_NAME:-edutrust-backend}"
+          
+          echo "Deleting all images from ECR repository: $REPO_NAME"
+          
+          # Get all image IDs
+          IMAGE_IDS=$(aws ecr list-images \
+            --repository-name "$REPO_NAME" \
+            --query 'imageIds[*]' \
+            --output json 2>/dev/null || echo "[]")
+          
+          if [ "$IMAGE_IDS" != "[]" ] && [ -n "$IMAGE_IDS" ]; then
+            aws ecr batch-delete-image \
+              --repository-name "$REPO_NAME" \
+              --image-ids "$IMAGE_IDS" || true
+            echo "✓ Deleted all images from $REPO_NAME"
+          else
+            echo "No images found in $REPO_NAME"
+          fi
+
+      - name: Terraform Destroy (Core)
+        working-directory: ${{ env.TF_DIR_BASE }}
+        run: |
+          terraform init
+          terraform destroy -auto-approve -input=false
+
+  cleanup-summary:
+    name: Cleanup Summary
+    runs-on: ubuntu-latest
+    needs: [destroy-service, destroy-core]
+    steps:
+      - name: Summary
+        run: |
+          echo "🗑️ Infrastructure cleanup completed!"
+          echo ""
+          echo "Destroyed resources:"
+          echo "  ✓ Service infrastructure (ASG, EC2, ALB, etc.)"
+          echo "  ✓ Core infrastructure (VPC, ECR, S3, Cognito, etc.)"
+          echo "  ✓ S3 bucket contents"
+          echo "  ✓ ECR images"
