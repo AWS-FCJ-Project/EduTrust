@@ -102,19 +102,13 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 }
 
 resource "aws_cloudfront_distribution" "main" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "index.html"
-  web_acl_id          = aws_wafv2_web_acl.cloudfront.arn
-  aliases             = [var.domain_name]
+  # checkov:skip=CKV_AWS_305:No default_root_object needed - CloudFront routes all traffic to ALB backend, not serving static files
+  enabled         = true
+  is_ipv6_enabled = true
+  web_acl_id      = aws_wafv2_web_acl.cloudfront.arn
+  aliases         = [var.domain_name]
 
   depends_on = [aws_wafv2_web_acl.cloudfront]
-
-  origin {
-    domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
-    origin_id                = "S3-Frontend"
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
-  }
 
   origin {
     domain_name = "api.${var.domain_name}"
@@ -130,7 +124,7 @@ resource "aws_cloudfront_distribution" "main" {
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "S3-Frontend"
+    target_origin_id       = "ALB-Backend"
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
@@ -173,12 +167,6 @@ resource "aws_cloudfront_distribution" "main" {
     acm_certificate_arn      = aws_acm_certificate_validation.cloudfront.certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
-  }
-
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
   }
 
   tags = { Name = "${var.ec2_instance_name}-cloudfront" }

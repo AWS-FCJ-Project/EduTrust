@@ -1,5 +1,6 @@
 output "aws_region" { value = var.aws_region }
 output "vpc_id" { value = aws_vpc.main.id }
+output "vpc_cidr_block" { value = aws_vpc.main.cidr_block }
 output "private_subnet_ids" { value = [aws_subnet.private_1a.id, aws_subnet.private_1c.id] }
 output "public_subnet_ids" { value = [aws_subnet.public_1a.id, aws_subnet.public_1c.id] }
 output "route53_zone_id" { value = aws_route53_zone.main.zone_id }

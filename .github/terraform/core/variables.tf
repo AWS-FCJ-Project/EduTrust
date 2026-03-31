@@ -21,4 +21,3 @@ variable "ecr_tag_immutable" { type = bool }
 
 variable "domain_name" { type = string }
 variable "cognito_domain_prefix" { type = string }
-variable "frontend_bucket_name" { type = string }

@@ -2,21 +2,11 @@ name: CI
 
 on:
   pull_request:
-    paths:
-      - "backend/**"
-      - ".pre-commit-config.yaml"
-      - ".github/workflows/**"
-      - "Dockerfile"
-      - ".github/terraform/**"
+    # Run CI on all PRs regardless of changed files
   push:
     branches:
       - main
-    paths:
-      - "backend/**"
-      - ".pre-commit-config.yaml"
-      - ".github/workflows/**"
-      - "Dockerfile"
-      - ".github/terraform/**"
+    # Run CI on all pushes to main
   workflow_dispatch:
 
 permissions:

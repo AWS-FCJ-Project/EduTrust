@@ -1,6 +1,9 @@
 import ExamPage from "./ExamPage";
 
-export const generateStaticParams = () => [];
+// Force dynamic rendering for user-specific exam data
+// This page requires authentication and real-time data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function Page() {
     return <ExamPage />;

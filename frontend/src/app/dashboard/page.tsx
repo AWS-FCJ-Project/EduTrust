@@ -34,15 +34,24 @@ export default function DashboardPage() {
                 const token = Cookies.get('auth_token');
                 if (!token) return;
 
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-info`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+                if (!apiUrl) {
+                    console.error('API URL not configured');
+                    return;
+                }
+
+                // Use no-store for user-specific data
+                const response = await fetch(`${apiUrl}/user-info`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    cache: 'no-store'
                 });
+                
                 if (response.ok) {
                     const data = await response.json();
                     setUser(data);
                 }
             } catch (error) {
-                console.error("Error:", error);
+                console.error("Error fetching user:", error);
             } finally {
                 setLoading(false);
             }

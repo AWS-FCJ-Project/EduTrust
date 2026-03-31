@@ -26,11 +26,19 @@ resource "aws_security_group" "backend" {
   }
 
   egress {
-    description = "HTTPS outbound"
+    description = "HTTPS outbound to internet"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "HTTPS to VPC endpoints"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [data.terraform_remote_state.core.outputs.vpc_cidr_block]
   }
 
   egress {
